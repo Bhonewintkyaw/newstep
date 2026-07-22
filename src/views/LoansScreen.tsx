@@ -8,7 +8,7 @@ import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 
 interface LoansScreenProps {
   financialInstitutions: FinancialInstitution[];
-  registeredLoanProfile: RegisteredLoanProfile;
+  registeredLoanProfile: RegisteredLoanProfile | null;
   userProfile: UserProfile;
   onOpenVoiceModal: () => void;
   onUpdateRegisteredLoan: (updatedProfile: RegisteredLoanProfile) => void;
@@ -64,6 +64,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
   };
 
   const handlePlayVoiceReminder = () => {
+    if (!registeredLoanProfile) return;
     speak(`သတိပေးချက် - ${registeredLoanProfile.organizationName} သို့ လာမည့် ၅ ရက်အတွင်း ${registeredLoanProfile.weeklyRepaymentMMK.toLocaleString()} ကျပ် ပေးဆပ်ရန် လိုအပ်ပါသည်။ အချိန်မှန် ပေးဆပ်ပါက ခရီးဒစ် ရမှတ် ၅၀ တိုးမြှင့်ရရှိပါမည်။`);
   };
 
@@ -105,6 +106,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
   };
 
   const handleConfirmRepayment = () => {
+    if (!registeredLoanProfile) return;
     const payAmt = Number(repayInput) || registeredLoanProfile.weeklyRepaymentMMK;
     const newPaidWeeks = Math.min(registeredLoanProfile.totalWeeks, registeredLoanProfile.paidWeeks + 1);
     onUpdateRegisteredLoan({
@@ -119,7 +121,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
     alert(language === 'my' ? `ကျေးဇူးတင်ပါသည်။ +၅၀ ခရီးဒစ် ရမှတ်! 🌟` : `Repayment confirmed! +50 Credit Points! 🌟`);
   };
 
-  const starInfo = getStarLevelInfo(userProfile.creditPoints || 780);
+  const starInfo = getStarLevelInfo(userProfile.creditPoints ?? 0);
   const t = (my: string, en: string) => (language === 'my' ? my : en);
 
   return (
@@ -143,7 +145,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
             <div>
               <p className="text-xs font-extrabold text-[#9becf7] uppercase tracking-wider">{t('ယုံကြည်စိတ်ချရမှု ခရီးဒစ် စနစ် (Credit System)', 'Client Trust Rating')}</p>
               <h3 className="text-lg font-extrabold text-white">{t(starInfo.labelBurmese, starInfo.labelEnglish)}</h3>
-              <p className="text-xs text-gray-200 mt-0.5">{t(`ခရီးဒစ် ရမှတ်: ${userProfile.creditPoints || 780} မှတ်`, `Credit Points: ${userProfile.creditPoints || 780} pts`)}</p>
+              <p className="text-xs text-gray-200 mt-0.5">{t(`ခရီးဒစ် ရမှတ်: ${userProfile.creditPoints} မှတ်`, `Credit Points: ${userProfile.creditPoints} pts`)}</p>
             </div>
           </div>
           <div className="bg-white/15 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/20 text-center shrink-0">
@@ -154,7 +156,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
 
         <div className="space-y-1 pt-1">
           <div className="w-full bg-white/20 h-2.5 rounded-full overflow-hidden">
-            <div className="bg-[#ffba27] h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, ((userProfile.creditPoints || 780) / 1200) * 100)}%` }} />
+            <div className="bg-[#ffba27] h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, (userProfile.creditPoints / 1200) * 100)}%` }} />
           </div>
           <p className="text-[10px] font-semibold text-[#9becf7] text-right">
             {t('အချိန်မှန် ချေးငွေပြန်ဆပ်ပါက ခရီးဒစ် ရမှတ်များ တိုးတက်ရရှိပါမည်။', 'Earn Credit Points for every on-time repayment to unlock lower interest rates.')}
@@ -163,6 +165,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
       </section>
 
       {/* Active Loan */}
+      {registeredLoanProfile ? (
       <section className="bg-white p-6 rounded-3xl shadow-xs border border-[#bec8ca]/30 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
           <div>
@@ -197,6 +200,13 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
           </div>
         </div>
       </section>
+      ) : (
+        <section className="bg-white p-6 rounded-3xl border border-dashed border-[#00535b]/25 text-center">
+          <span className="material-symbols-outlined text-4xl text-[#006d77]">account_balance_wallet</span>
+          <h3 className="mt-2 font-extrabold text-[#00201e]">{t('ချေးငွေ မရှိသေးပါ', 'No active loan')}</h3>
+          <p className="mt-1 text-sm text-[#3e494a]">{t('ချေးငွေလျှောက်ထားပြီးနောက် အချက်အလက်များကို ဤနေရာတွင် ပြသပါမည်။', 'Your loan details will appear here after you apply.')}</p>
+        </section>
+      )}
 
       {/* Map & Filters */}
       <section className="space-y-4">
@@ -230,8 +240,8 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
               iconName: inst.iconName,
               containerBgClass: inst.containerBgClass,
             }))}
-            center={{ lat: 16.8661, lng: 96.1951 }}
-            zoom={12}
+            center={{ lat: 19.7633, lng: 96.0785 }}
+            zoom={financialInstitutions.length ? 12 : 6}
             onMarkerClick={(id) => {
               const found = financialInstitutions.find((i) => i.id === id);
               if (found) setSelectedMapPin(found);
@@ -263,6 +273,12 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
       {/* Institution Cards */}
       <section className="space-y-4">
         <h3 className="font-extrabold text-base text-[#00535b]">{t('ရွေးချယ်နိုင်သော အဖွဲ့အစည်း အသေးစိတ်', 'Available Organizations & Comparison')}</h3>
+        {filteredInstitutions.length === 0 && (
+          <div className="rounded-3xl bg-white p-8 text-center border border-[#bec8ca]/30">
+            <span className="material-symbols-outlined text-4xl text-[#006d77]">search_off</span>
+            <p className="mt-2 text-sm font-bold text-[#3e494a]">{t('အဖွဲ့အစည်းဒေတာ မရှိသေးပါ', 'No organization data yet')}</p>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filteredInstitutions.map((inst) => {
             const isCompared = comparedIds.includes(inst.id);
@@ -365,6 +381,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
       </Modal>
 
       {/* Repay Modal */}
+      {registeredLoanProfile && (
       <Modal isOpen={showRepayModal} onClose={() => setShowRepayModal(false)}
         title={t('ချေးငွေ အပတ်စဉ် ပြန်ဆပ်ရန်', 'Pay Loan Installment')} maxWidth="max-w-md">
         <p className="text-xs text-[#3e494a]">
@@ -376,6 +393,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
           {t('အတည်ပြု ပေးဆပ်မည် (Earn +50 pts)', 'Confirm Repayment (+50 pts)')}
         </button>
       </Modal>
+      )}
 
       <FloatingMicButton onOpenVoiceModal={onOpenVoiceModal} />
     </div>

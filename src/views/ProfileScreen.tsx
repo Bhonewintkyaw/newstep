@@ -239,7 +239,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 onClick={onResetData}
                 className="w-full py-3 border border-[#ba1a1a]/30 text-[#ba1a1a] hover:bg-[#ffdad6]/30 font-bold text-xs sm:text-sm rounded-2xl transition-colors cursor-pointer"
               >
-                {language === 'my' ? 'မူလ စာရင်းများ ပြန်စမည် (Reset Demo Data)' : 'Reset Demo Data'}
+                {language === 'my' ? 'အကောင့်ဒေတာ ရှင်းမည်' : 'Clear Account Data'}
               </button>
             </div>
           </section>
@@ -303,7 +303,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   onChange={(e) => setEditName(e.target.value)}
                   required
                   className="w-full h-11 px-3 bg-white border border-[#bec8ca] focus:border-[#00535b] rounded-xl font-bold text-sm outline-none"
-                  placeholder="e.g. Daw Sandar (ဒေါ်စန္ဒာ)"
+                  placeholder={language === 'my' ? 'သင့်အမည်' : 'Your name'}
                 />
               </div>
 
@@ -346,7 +346,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   value={editCity}
                   onChange={(e) => setEditCity(e.target.value)}
                   className="w-full h-11 px-3 bg-white border border-[#bec8ca] focus:border-[#00535b] rounded-xl font-bold text-sm outline-none"
-                  placeholder="Yangon, Myanmar"
+                  placeholder={language === 'my' ? 'မြို့ / မြို့နယ်' : 'City or township'}
                 />
               </div>
 

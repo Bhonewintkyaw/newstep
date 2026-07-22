@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile, TabType } from '../types';
+import { FloatingMicButton } from '../components/FloatingMicButton';
 
 interface HomeScreenProps {
   userProfile: UserProfile;
@@ -50,7 +51,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           <div className="text-right shrink-0">
             <div className="flex gap-1 justify-end">
-              {[1, 2, 3].map((star) => (
+              {Array.from({ length: userProfile.ratingStars }).map((_, star) => (
                 <span
                   key={star}
                   className="material-symbols-outlined fill text-2xl text-[#ffba27]"
@@ -78,11 +79,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
             <div>
               <p className="font-extrabold text-base text-[#00201e]">
-                {language === 'my' ? '၃၂°C နေသာပါသည်' : '32°C Sunny Forecast'}
+                {language === 'my' ? 'မိုးလေဝသ တည်နေရာသတ်မှတ်ရန်' : 'Set location for weather'}
               </p>
               <div className="flex items-center gap-1 text-[#3e494a] text-xs font-semibold mt-0.5">
                 <span className="material-symbols-outlined text-sm">location_on</span>
-                <span>Yangon • AI Prediction</span>
+                <span>{language === 'my' ? 'ဒေတာမရှိသေးပါ' : 'No weather data yet'}</span>
               </div>
             </div>
           </div>
@@ -229,20 +230,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       </section>
 
-      {/* Voice Prompt Sticky Footer Banner */}
-      <div
-        onClick={onOpenVoiceModal}
-        className="fixed bottom-22 left-1/2 -translate-x-1/2 lg:left-[calc(50%+8rem)] w-[90%] max-w-md lg:max-w-lg glass-card p-4 rounded-full shadow-xl flex items-center justify-center gap-3 border border-[#00535b]/20 bg-white/95 cursor-pointer hover:bg-white active:scale-98 transition-[background-color,transform] duration-150 transform-gpu z-30"
-      >
-        <span className="material-symbols-outlined text-[#00535b] text-xl shrink-0">
-          auto_awesome
-        </span>
-        <p className="text-xs sm:text-sm font-extrabold text-[#00201e] text-center">
-          {language === 'my'
-            ? 'ယနေ့ အရောင်းစာရင်း သွင်းလိုပါသလား?'
-            : 'Do you want to log today\'s sales record?'}
-        </p>
-      </div>
+      <FloatingMicButton onOpenVoiceModal={onOpenVoiceModal} />
     </div>
   );
 };

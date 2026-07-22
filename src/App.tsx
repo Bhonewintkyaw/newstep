@@ -12,15 +12,8 @@ import { PredictionScreen } from './views/PredictionScreen';
 import { ProfileScreen } from './views/ProfileScreen';
 
 import {
-  initialUserProfile,
-  initialCurrentLoan,
-  initialRegisteredLoanProfile,
-  initialLowStockAlerts,
-  initialInventory,
-  initialTransactions,
-  financialInstitutionsList,
-  initialWeatherData as weatherDataYangon,
-  marketRecommendationsList,
+  emptyUserProfile,
+  emptyWeatherData,
 } from './data/mockData';
 
 import type {
@@ -38,12 +31,11 @@ export default function App() {
   const [language, setLanguage] = useState<'my' | 'en'>('my');
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
 
-  const [userProfile, setUserProfile] = useState(initialUserProfile);
-  const [currentLoan] = useState(initialCurrentLoan);
-  const [registeredLoanProfile, setRegisteredLoanProfile] = useState(initialRegisteredLoanProfile);
-  const [inventory, setInventory] = useState(initialInventory);
-  const [lowStockAlerts, setLowStockAlerts] = useState(initialLowStockAlerts);
-  const [transactions, setTransactions] = useState(initialTransactions);
+  const [userProfile, setUserProfile] = useState(emptyUserProfile);
+  const [registeredLoanProfile, setRegisteredLoanProfile] = useState<RegisteredLoanProfile | null>(null);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,8 +52,8 @@ export default function App() {
   const handleApplyVoiceResult = (result: VoiceProcessResult) => {
     if (result.action === 'RECORD_SALE' || result.action === 'RECORD_PURCHASE') {
       const isSale = result.action === 'RECORD_SALE';
-      const amount = result.amount || (isSale ? 150000 : 18000);
-      const itemName = result.itemName || (isSale ? 'ဆန် ၅ အိတ် (Rice)' : 'စားအုန်းဆီ (Cooking Oil)');
+      const amount = result.amount ?? 0;
+      const itemName = result.itemName?.trim() || (language === 'my' ? 'အရောင်းအဝယ်' : 'Transaction');
 
       const newTx: TransactionItem = {
         id: `tx-${Date.now()}`,
@@ -105,7 +97,7 @@ export default function App() {
   };
 
   const handleAddCreditPoints = (pointsToAdd: number) => {
-    setUserProfile((prev) => ({ ...prev, creditPoints: (prev.creditPoints || 780) + pointsToAdd }));
+    setUserProfile((prev) => ({ ...prev, creditPoints: prev.creditPoints + pointsToAdd }));
   };
 
   const handleUpdateUserProfile = (updated: UserProfile) => {
@@ -114,13 +106,13 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    setTransactions(initialTransactions);
-    setLowStockAlerts(initialLowStockAlerts);
-    setInventory(initialInventory);
-    setRegisteredLoanProfile(initialRegisteredLoanProfile);
-    setUserProfile(initialUserProfile);
+    setTransactions([]);
+    setLowStockAlerts([]);
+    setInventory([]);
+    setRegisteredLoanProfile(null);
+    setUserProfile(emptyUserProfile);
     setCurrentTab('onboarding');
-    triggerToast(language === 'my' ? 'မူလ စာရင်းများသို့ ပြန်လည်ပြင်ဆင်ပြီးပါပြီ' : 'Demo data reset to default');
+    triggerToast(language === 'my' ? 'အကောင့်ဒေတာအားလုံး ရှင်းလင်းပြီးပါပြီ' : 'Account data cleared');
   };
 
   const toggleLanguage = () => setLanguage((l) => (l === 'my' ? 'en' : 'my'));
@@ -149,12 +141,22 @@ export default function App() {
         )}
 
         {currentTab === 'onboarding' && (
-          <OnboardingScreen onComplete={() => setCurrentTab('home')} language={language} />
+          <OnboardingScreen
+            onComplete={(username, phone) => {
+              setUserProfile({ ...emptyUserProfile, name: username, phone });
+              setRegisteredLoanProfile(null);
+              setInventory([]);
+              setLowStockAlerts([]);
+              setTransactions([]);
+              setCurrentTab('home');
+            }}
+            language={language}
+          />
         )}
 
         {currentTab === 'loans' && (
           <LoansScreen
-            financialInstitutions={financialInstitutionsList}
+            financialInstitutions={[]}
             registeredLoanProfile={registeredLoanProfile}
             userProfile={userProfile}
             onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
@@ -166,8 +168,8 @@ export default function App() {
 
         {currentTab === 'prediction' && (
           <PredictionScreen
-            weatherData={weatherDataYangon}
-            marketRecommendations={marketRecommendationsList}
+            weatherData={emptyWeatherData}
+            marketRecommendations={[]}
             onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
             language={language}
           />
@@ -189,7 +191,6 @@ export default function App() {
         {currentTab === 'profile' && (
           <ProfileScreen
             userProfile={userProfile}
-            currentLoan={currentLoan}
             language={language}
             onToggleLanguage={toggleLanguage}
             onResetData={handleResetData}

@@ -9,7 +9,7 @@ interface InventoryScreenProps {
   inventory: InventoryItem[];
   lowStockAlerts: LowStockAlert[];
   transactions: TransactionItem[];
-  registeredLoanProfile: RegisteredLoanProfile;
+  registeredLoanProfile: RegisteredLoanProfile | null;
   onOpenVoiceModal: () => void;
   onAddTransaction: (tx: Omit<TransactionItem, 'id'>) => void;
   onRestockItem: (alertId: string) => void;
@@ -41,15 +41,15 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   const calculatedProfitFromTx = salesTx.reduce((sum, t) => sum + (t.profitMMK || Math.round(t.amountMMK * 0.2)), 0);
 
   const metrics = {
-    dailySalesMMK: totalSalesFromTx || 164000,
-    dailyProfitMMK: calculatedProfitFromTx || 33600,
-    monthlySalesMMK: (totalSalesFromTx || 164000) * 26,
-    monthlyProfitMMK: (calculatedProfitFromTx || 33600) * 26,
-    yearlySalesMMK: (totalSalesFromTx || 164000) * 310,
-    yearlyProfitMMK: (calculatedProfitFromTx || 33600) * 310,
+    dailySalesMMK: totalSalesFromTx,
+    dailyProfitMMK: calculatedProfitFromTx,
+    monthlySalesMMK: totalSalesFromTx * 26,
+    monthlyProfitMMK: calculatedProfitFromTx * 26,
+    yearlySalesMMK: totalSalesFromTx * 310,
+    yearlyProfitMMK: calculatedProfitFromTx * 310,
   };
 
-  const requiredMonthlyRepayment = registeredLoanProfile.weeklyRepaymentMMK * 4;
+  const requiredMonthlyRepayment = (registeredLoanProfile?.weeklyRepaymentMMK ?? 0) * 4;
   const monthlyProfit = metrics.monthlyProfitMMK;
   const coverageRatio = Math.round((monthlyProfit / (requiredMonthlyRepayment || 1)) * 100);
 
@@ -265,6 +265,11 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           </div>
 
           <div className="space-y-2.5">
+            {lowStockAlerts.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-[#00535b]/20 bg-white p-6 text-center text-sm font-semibold text-[#3e494a]">
+                {t('ပစ္စည်းပြတ်လပ်မှု မရှိသေးပါ', 'No low-stock alerts yet')}
+              </div>
+            )}
             {lowStockAlerts.map((alert) => (
               <div key={alert.id} className="flex items-center justify-between p-4 bg-white border border-[#ffdad6] rounded-2xl shadow-xs hover:shadow-sm transition-shadow">
                 <div className="flex items-center gap-3.5">
@@ -304,6 +309,12 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           </div>
 
           <div className="bg-white rounded-3xl shadow-xs border border-[#bec8ca]/30 divide-y divide-[#b1f5ed] overflow-hidden">
+            {transactions.length === 0 && (
+              <div className="p-8 text-center">
+                <span className="material-symbols-outlined text-4xl text-[#006d77]">receipt_long</span>
+                <p className="mt-2 text-sm font-bold text-[#3e494a]">{t('စာရင်းမရှိသေးပါ', 'No transactions yet')}</p>
+              </div>
+            )}
             {transactions.map((tx) => (
               <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-[#e4fffb]/50 transition-colors">
                 <div className="flex items-center gap-3.5">

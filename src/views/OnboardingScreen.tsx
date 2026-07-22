@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import bowingFarmerImg from '../assets/images/bowing_farmer_1784709620860.jpg';
 
 interface OnboardingScreenProps {
-  onComplete: () => void;
+  onComplete: (username: string, phone: string) => void;
   language: 'my' | 'en';
 }
 
@@ -25,8 +25,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 }) => {
   const [lang, setLang] = useState<'my' | 'en'>(initialLanguage);
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [phoneNumber, setPhoneNumber] = useState('9450123456');
-  const [otpDigits, setOtpDigits] = useState(['1', '2', '3', '4']);
+  const [username, setUsername] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
+  const [verificationCode, setVerificationCode] = useState('');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [timer, setTimer] = useState(30);
@@ -48,7 +50,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
   const handleSendOtp = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!phoneNumber.trim()) return;
+    if (!username.trim() || !phoneNumber.trim()) return;
+    const newCode = Math.floor(1000 + Math.random() * 9000).toString();
+    setVerificationCode(newCode);
+    setOtpDigits(['', '', '', '']);
 
     setIsSendingOtp(true);
     setTimeout(() => {
@@ -60,8 +65,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const msg = t(
-          'မင်္ဂလာပါခင်ဗျာ။ သင့်ဖုန်းသို့ OTP ကုဒ် ၁ ၂ ၃ ၄ ပေးပို့ထားပါသည်။',
-          'Mingalaba! Your OTP code is 1 2 3 4.'
+          `မင်္ဂလာပါခင်ဗျာ။ သင့် OTP ကုဒ်မှာ ${newCode.split('').join(' ')} ဖြစ်ပါသည်။`,
+          `Mingalaba! Your OTP code is ${newCode.split('').join(' ')}.`
         );
         const utterance = new SpeechSynthesisUtterance(msg);
         utterance.rate = 0.95;
@@ -85,8 +90,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const msg = t(
-        `သင့် OTP ကုဒ်မှာ ${otpDigits.join(' ')} ဖြစ်ပါသည်။`,
-        `Your OTP verification code is ${otpDigits.join(' ')}.`
+        `သင့် OTP ကုဒ်မှာ ${verificationCode.split('').join(' ')} ဖြစ်ပါသည်။`,
+        `Your OTP verification code is ${verificationCode.split('').join(' ')}.`
       );
       const utterance = new SpeechSynthesisUtterance(msg);
       utterance.rate = 0.85;
@@ -96,6 +101,12 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
   const handleVerifyOtp = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (otpDigits.join('') !== verificationCode) {
+      setToastText(t('OTP ကုဒ် မမှန်ပါ', 'Incorrect OTP code'));
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 1800);
+      return;
+    }
     setIsVerifying(true);
     setTimeout(() => {
       setIsVerifying(false);
@@ -104,7 +115,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         'Welcome! Login verified successfully'
       ));
       setShowToast(true);
-      setTimeout(() => { setShowToast(false); onComplete(); }, 1200);
+      setTimeout(() => {
+        setShowToast(false);
+        onComplete(username.trim(), `+95 ${phoneNumber.trim()}`);
+      }, 1200);
     }, 1000);
   };
 
@@ -225,6 +239,21 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
             {step === 'phone' && (
               <form onSubmit={handleSendOtp} className="space-y-5 animate-in fade-in duration-200">
                 <div className="space-y-2">
+                  <label htmlFor="username" className="text-xs font-bold text-[#3e494a] block ml-1 uppercase tracking-wider">
+                    {t('အသုံးပြုသူအမည်', 'Username')}
+                  </label>
+                  <input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    autoComplete="name"
+                    className="w-full h-14 px-4 bg-white border-2 border-[#bec8ca] focus:border-[#00535b] rounded-2xl font-bold text-base outline-none transition-all shadow-xs"
+                    placeholder={t('သင့်အမည်ကို ရိုက်ထည့်ပါ', 'Enter your name')}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
                   <label className="text-xs font-bold text-[#3e494a] block ml-1 uppercase tracking-wider">
                     {t('ဖုန်းနံပါတ်', 'Phone Number')}
                   </label>
@@ -243,14 +272,11 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                       required
                     />
                   </div>
-                  <p className="text-[11px] text-[#3e494a] ml-1 font-medium">
-                    {t('စမ်းသပ်ရန်: 09450123456', 'Demo: 09-450123456')}
-                  </p>
                 </div>
 
                 <button
                   type="submit"
-                  disabled={isSendingOtp || !phoneNumber.trim()}
+                  disabled={isSendingOtp || !username.trim() || !phoneNumber.trim()}
                   className="w-full h-14 bg-[#00535b] hover:bg-[#006d77] disabled:opacity-50 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all cursor-pointer"
                 >
                   {isSendingOtp ? (
@@ -299,11 +325,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <button type="button" onClick={() => setOtpDigits(['1', '2', '3', '4'])}
-                      className="text-xs font-bold text-[#006d77] underline cursor-pointer">
-                      {t('ဒီမိုဖြည့်ရန် 1234', 'Fill Demo 1234')}
-                    </button>
-
                     <div className="text-xs font-bold text-[#3e494a]">
                       {canResend ? (
                         <button type="button" onClick={() => handleSendOtp()}
