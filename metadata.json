@@ -1,0 +1,10 @@
+{
+  "name": "Remix: Remix: First Step (ခြေလှမ်းသစ်)",
+  "description": "AI-powered voice assistant and financial manager for Myanmar micro-entrepreneurs. Tracks sales, inventory, weather insights, and local loan opportunities.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
