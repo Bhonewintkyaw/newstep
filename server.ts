@@ -1,12 +1,12 @@
 import express from 'express';
 import path from 'path';
 import dotenv from 'dotenv';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json());
 
@@ -32,98 +32,151 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'First Step (ခြေလှမ်းသစ်)' });
 });
 
-// AI Voice Processing Route
-app.post('/api/ai/voice-process', async (req, res) => {
-  try {
-    const { transcript, currentLanguage = 'my' } = req.body;
-    if (!transcript || typeof transcript !== 'string') {
-      return res.status(400).json({ error: 'Transcript is required' });
-    }
+type VoiceAction = 'RECORD_SALE' | 'RECORD_PURCHASE' | 'CHECK_LOAN' | 'CHECK_WEATHER' | 'INVENTORY_INQUIRY' | 'GENERAL_QUERY';
 
-    const ai = getGeminiClient();
-    if (!ai) {
-      // Fallback offline parser if API key is not supplied
-      const lower = transcript.toLowerCase();
-      let action = 'GENERAL_QUERY';
-      let replyBurmese = 'သင့်တောင်းဆိုမှုကို မန်နေဂျာ AI မှ လက်ခံရရှိပါသည်။';
-      let replyEnglish = 'Manager AI received your request.';
-      let amount = 0;
-      let itemName = '';
-
-      if (transcript.includes('ရောင်း') || lower.includes('sold') || lower.includes('sale')) {
-        action = 'RECORD_SALE';
-        replyBurmese = 'အရောင်းစာရင်း မှတ်တမ်းတင်ပြီးပါပြီ။ (ဝယ်ယူသူ စာရင်းသွင်းပြီး)';
-        replyEnglish = 'Sale record logged successfully.';
-        amount = 150000;
-        itemName = 'ဆန် ၅ အိတ် (5 bags of rice)';
-      } else if (transcript.includes('ဝယ်') || lower.includes('buy') || lower.includes('purchase')) {
-        action = 'RECORD_PURCHASE';
-        replyBurmese = 'အဝယ်စာရင်း မှတ်တမ်းတင်ပြီးပါပြီ။';
-        replyEnglish = 'Purchase record logged successfully.';
-        amount = 18000;
-        itemName = 'စားအုန်းဆီ (Cooking Oil)';
-      } else if (transcript.includes('ချေးငွေ') || lower.includes('loan')) {
-        action = 'CHECK_LOAN';
-        replyBurmese = 'သင့် လက်ရှိ ချေးငွေ ၆၅% ပြန်ဆပ်ရန် ကျန်ရှိပြီး၊ ယခုအပတ် ၅၀,၀၀၀ ကျပ် ပြန်ဆပ်ရန် အကြံပြုပါသည်။';
-        replyEnglish = 'Your loan is 65% remaining, recommended weekly repayment is 50,000 MMK.';
-      } else if (transcript.includes('မိုးလေဝသ') || lower.includes('weather')) {
-        action = 'CHECK_WEATHER';
-        replyBurmese = 'ရန်ကုန်မြို့တွင် ယနေ့ ရာသီဥတု နေသာပါသည် (၃၂°C)။ ဈေးရောင်းရန် အဆင်ပြေပါသည်။';
-        replyEnglish = 'Sunny in Yangon (32°C). Good weather for market trading.';
-      }
-
-      return res.json({
-        action,
-        itemName,
-        amount,
-        replyBurmese,
-        replyEnglish,
-      });
-    }
-
-    const prompt = `You are the AI Business Assistant for "First Step" (ခြေလှမ်းသစ်), an app for small shop owners and micro-entrepreneurs in Myanmar.
-The user spoke or typed this input: "${transcript}".
-
-Analyze the input and output valid JSON with this exact schema:
-{
-  "action": "RECORD_SALE" | "RECORD_PURCHASE" | "CHECK_LOAN" | "CHECK_WEATHER" | "INVENTORY_INQUIRY" | "GENERAL_QUERY",
-  "itemName": "string (name of item if mentioned, in Burmese and English)",
-  "quantity": "number or string (e.g., 5 bags, 2 bottles)",
-  "amount": number (estimated amount in MMK Myanmar Kyats if applicable, e.g. 150000 for 5 rice bags),
-  "replyBurmese": "string (warm, friendly response in natural polite Burmese language)",
-  "replyEnglish": "string (English translation of reply)"
+interface VoiceResult {
+  action: VoiceAction;
+  itemName?: string;
+  quantity?: string | number;
+  amount?: number;
+  replyBurmese: string;
+  replyEnglish: string;
 }
 
-Ensure the response is valid JSON only without markdown formatting.`;
+const voiceActions = new Set<VoiceAction>([
+  'RECORD_SALE', 'RECORD_PURCHASE', 'CHECK_LOAN', 'CHECK_WEATHER', 'INVENTORY_INQUIRY', 'GENERAL_QUERY',
+]);
 
+const normalizeMyanmarDigits = (value: string) => value.replace(/[၀-၉]/g, (digit) => String('၀၁၂၃၄၅၆၇၈၉'.indexOf(digit)));
+
+function extractExplicitAmount(transcript: string): number | undefined {
+  const normalized = normalizeMyanmarDigits(transcript);
+  const currencyAmount = normalized.match(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:ကျပ်|kyats?|mmk|ks\.?)/i);
+  const englishTotal = normalized.match(/(?:for|total|amount|price)\s*[:=-]?\s*([0-9][0-9,]*(?:\.[0-9]+)?)/i);
+  const match = currencyAmount || englishTotal;
+  if (!match) return undefined;
+  const amount = Number(match[1].replace(/,/g, ''));
+  return Number.isFinite(amount) && amount > 0 && amount <= 1_000_000_000_000 ? Math.round(amount) : undefined;
+}
+
+function extractItemName(transcript: string): string {
+  const cleaned = normalizeMyanmarDigits(transcript)
+    .replace(/([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:ကျပ်|kyats?|mmk|ks\.?)/gi, '')
+    .replace(/(?:for|total|amount|price)\s*[:=-]?\s*[0-9][0-9,]*(?:\.[0-9]+)?/gi, '')
+    .replace(/\b(?:sold|sell|sale|bought|buy|purchase|record|log)\b/gi, '')
+    .replace(/\b(?:for|total|amount|price)\b/gi, '')
+    .replace(/(?:ရောင်းခဲ့သည်|ရောင်းသည်|ရောင်း|ဝယ်ယူခဲ့သည်|ဝယ်ယူသည်|ဝယ်ယူ|ဝယ်)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.slice(0, 120);
+}
+
+function parseVoiceCommand(transcript: string): VoiceResult {
+  const lower = transcript.toLowerCase();
+  const isSale = /\b(sold|sell|sale)\b/i.test(lower) || transcript.includes('ရောင်း');
+  const isPurchase = /\b(bought|buy|purchase)\b/i.test(lower) || transcript.includes('ဝယ်');
+
+  if (isSale || isPurchase) {
+    const amount = extractExplicitAmount(transcript);
+    if (!amount) {
+      return {
+        action: 'GENERAL_QUERY',
+        replyBurmese: 'စာရင်းမသွင်းရသေးပါ။ ပစ္စည်းအမည်နှင့် စုစုပေါင်းငွေပမာဏကို ကျပ်ဖြင့် ပြောပါ။',
+        replyEnglish: 'Nothing was saved. Please say the item and exact total amount in MMK.',
+      };
+    }
+    const itemName = extractItemName(transcript) || (isSale ? 'Sale' : 'Purchase');
+    return {
+      action: isSale ? 'RECORD_SALE' : 'RECORD_PURCHASE',
+      itemName,
+      amount,
+      replyBurmese: `${itemName}၊ ${amount.toLocaleString()} ကျပ်ကို စစ်ဆေးပြီး စာရင်းသွင်းနိုင်ပါသည်။`,
+      replyEnglish: `Review ${itemName} for ${amount.toLocaleString()} MMK, then save the record.`,
+    };
+  }
+  if (transcript.includes('ချေးငွေ') || /\b(loan|finance|bank)\b/i.test(lower)) {
+    return { action: 'CHECK_LOAN', replyBurmese: 'ငွေကြေးနှင့် ချေးငွေစာမျက်နှာကို ဖွင့်ပေးပါမည်။', replyEnglish: 'Opening the finance and loan page.' };
+  }
+  if (transcript.includes('မိုးလေဝသ') || transcript.includes('ရာသီဥတု') || /\b(weather|forecast)\b/i.test(lower)) {
+    return { action: 'CHECK_WEATHER', replyBurmese: 'လက်ရှိတည်နေရာအတွက် မိုးလေဝသစာမျက်နှာကို ဖွင့်ပေးပါမည်။', replyEnglish: 'Opening the weather page for your location.' };
+  }
+  if (transcript.includes('ကုန်ပစ္စည်း') || transcript.includes('စာရင်း') || /\b(inventory|stock|transactions?)\b/i.test(lower)) {
+    return { action: 'INVENTORY_INQUIRY', replyBurmese: 'ကုန်ပစ္စည်းနှင့် အရောင်းအဝယ်စာရင်းကို ဖွင့်ပေးပါမည်။', replyEnglish: 'Opening inventory and transaction records.' };
+  }
+  return {
+    action: 'GENERAL_QUERY',
+    replyBurmese: 'အရောင်း၊ အဝယ်၊ ချေးငွေ၊ ကုန်ပစ္စည်းစာရင်း သို့မဟုတ် မိုးလေဝသအကြောင်း မေးနိုင်ပါသည်။',
+    replyEnglish: 'You can record sales or purchases, or ask about loans, inventory, and weather.',
+  };
+}
+
+function validateVoiceResult(candidate: unknown, transcript: string): VoiceResult {
+  if (!candidate || typeof candidate !== 'object') return parseVoiceCommand(transcript);
+  const value = candidate as Record<string, unknown>;
+  const action = typeof value.action === 'string' && voiceActions.has(value.action as VoiceAction)
+    ? value.action as VoiceAction
+    : 'GENERAL_QUERY';
+  const amount = typeof value.amount === 'number' && Number.isFinite(value.amount) && value.amount > 0
+    ? Math.min(Math.round(value.amount), 1_000_000_000_000)
+    : undefined;
+
+  if ((action === 'RECORD_SALE' || action === 'RECORD_PURCHASE') && !amount) {
+    return parseVoiceCommand(transcript);
+  }
+
+  return {
+    action,
+    itemName: typeof value.itemName === 'string' ? value.itemName.trim().slice(0, 120) : undefined,
+    quantity: typeof value.quantity === 'string' || typeof value.quantity === 'number' ? value.quantity : undefined,
+    amount,
+    replyBurmese: typeof value.replyBurmese === 'string' && value.replyBurmese.trim()
+      ? value.replyBurmese.trim().slice(0, 500)
+      : 'တောင်းဆိုမှုကို လုပ်ဆောင်ပြီးပါပြီ။',
+    replyEnglish: typeof value.replyEnglish === 'string' && value.replyEnglish.trim()
+      ? value.replyEnglish.trim().slice(0, 500)
+      : 'Your request has been processed.',
+  };
+}
+
+// AI Voice Processing Route. A deterministic parser remains available when Gemini is unavailable.
+app.post('/api/ai/voice-process', async (req, res) => {
+  const transcript = typeof req.body?.transcript === 'string' ? req.body.transcript.trim() : '';
+  if (!transcript) return res.status(400).json({ error: 'Transcript is required' });
+  if (transcript.length > 500) return res.status(400).json({ error: 'Transcript is too long' });
+
+  const fallback = parseVoiceCommand(transcript);
+  const recognizedTransaction = /\b(sold|sell|sale|bought|buy|purchase)\b/i.test(transcript)
+    || transcript.includes('ရောင်း') || transcript.includes('ဝယ်');
+  if (fallback.action !== 'GENERAL_QUERY' || recognizedTransaction) return res.json(fallback);
+  const ai = getGeminiClient();
+  if (!ai) return res.json(fallback);
+
+  try {
+    const prompt = `Classify this Myanmar small-business voice command and extract only information explicitly present: ${JSON.stringify(transcript)}.
+Never estimate or invent money. For sales and purchases, amount must be the exact total MMK stated by the user; otherwise use GENERAL_QUERY and ask for it. Navigation commands should use CHECK_LOAN, CHECK_WEATHER, or INVENTORY_INQUIRY. Reply naturally in both Burmese and English.`;
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.6-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            action: { type: Type.STRING, enum: [...voiceActions] },
+            itemName: { type: Type.STRING },
+            quantity: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            replyBurmese: { type: Type.STRING },
+            replyEnglish: { type: Type.STRING },
+          },
+          required: ['action', 'replyBurmese', 'replyEnglish'],
+        },
       },
     });
-
-    const responseText = response.text || '{}';
-    let parsedData;
-    try {
-      parsedData = JSON.parse(responseText.trim());
-    } catch {
-      parsedData = {
-        action: 'GENERAL_QUERY',
-        replyBurmese: 'နားလည်ပါသည်၊ သင့်စကားသံအတွက် ကျေးဇူးတင်ပါသည်။',
-        replyEnglish: 'Understood, thank you for your input.',
-      };
-    }
-
-    return res.json(parsedData);
-  } catch (error: any) {
-    console.error('Error in /api/ai/voice-process:', error);
-    return res.status(500).json({
-      error: 'Failed to process voice request',
-      replyBurmese: 'ခေတ္တစောင့်ဆိုင်းပါ၊ အသံစနစ် လုပ်ဆောင်ရာတွင် အမှားအယွင်းရှိခဲ့ပါသည်။',
-      replyEnglish: 'Error processing voice command. Please try again.',
-    });
+    return res.json(validateVoiceResult(JSON.parse(response.text || '{}'), transcript));
+  } catch (error) {
+    console.error('Gemini voice processing failed; using the local parser.', error);
+    return res.json(fallback);
   }
 });
 
@@ -242,100 +295,138 @@ function mapWeatherIcon(iconCode: string): string {
   return iconMap[iconCode] || 'wb_cloudy';
 }
 
-// Weather API
+// Server-side proxy avoids browser CORS failures and keeps the map query bounded.
+app.get('/api/finance/nearby', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'Valid latitude and longitude are required' });
+  }
+  const query = `[out:json][timeout:25];(
+    nwr(around:15000,${lat},${lng})["amenity"="bank"];
+    nwr(around:15000,${lat},${lng})["office"~"financial|microfinance|ngo"];
+    nwr(around:15000,${lat},${lng})["name"~"microfinance|micro finance|NGO|foundation",i];
+  );out center tags 100;`;
+  try {
+    const endpoints = [
+      'https://overpass.private.coffee/api/interpreter',
+      'https://lz4.overpass-api.de/api/interpreter',
+      'https://z.overpass-api.de/api/interpreter',
+      'https://overpass-api.de/api/interpreter',
+    ];
+    let lastError: unknown;
+    for (const endpoint of endpoints) {
+      try {
+        const overpassResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'FirstStep-Myanmar/1.0',
+          },
+          body: new URLSearchParams({ data: query }),
+          signal: AbortSignal.timeout(12_000),
+        });
+        if (!overpassResponse.ok) throw new Error(`Overpass returned ${overpassResponse.status}`);
+        const payload = await overpassResponse.json() as { elements?: unknown[] };
+        return res.json({ elements: Array.isArray(payload.elements) ? payload.elements : [] });
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  } catch (error) {
+    console.error('Nearby finance lookup failed:', error);
+    return res.status(502).json({ error: 'Nearby organization search is temporarily unavailable' });
+  }
+});
+
+const cityLocations: Record<string, { lat: number; lon: number; burmese: string }> = {
+  Yangon: { lat: 16.8409, lon: 96.1735, burmese: 'ရန်ကုန်မြို့' },
+  Mandalay: { lat: 21.9588, lon: 96.0891, burmese: 'မန္တလေးမြို့' },
+  Naypyidaw: { lat: 19.7633, lon: 96.0785, burmese: 'နေပြည်တော်' },
+  Bago: { lat: 17.3352, lon: 96.4814, burmese: 'ပဲခူးမြို့' },
+  Mawlamyine: { lat: 16.4905, lon: 97.6283, burmese: 'မော်လမြိုင်မြို့' },
+  Taunggyi: { lat: 20.7892, lon: 97.0378, burmese: 'တောင်ကြီးမြို့' },
+  Myitkyina: { lat: 25.3833, lon: 97.4, burmese: 'မြစ်ကြီးနားမြို့' },
+  Sittwe: { lat: 20.1462, lon: 92.8984, burmese: 'စစ်တွေမြို့' },
+  Pathein: { lat: 16.7792, lon: 94.7321, burmese: 'ပုသိမ်မြို့' },
+  'Pyin Oo Lwin': { lat: 22.035, lon: 96.4568, burmese: 'ပြင်ဦးလွင်မြို့' },
+};
+
+function weatherCodeDetails(code: number) {
+  if (code === 0) return { condition: 'clear', english: 'clear sky', icon: 'wb_sunny' };
+  if (code <= 3) return { condition: 'clouds', english: 'partly cloudy', icon: 'partly_cloudy_day' };
+  if (code <= 48) return { condition: 'fog', english: 'foggy', icon: 'foggy' };
+  if (code <= 57) return { condition: 'drizzle', english: 'drizzle', icon: 'rainy_light' };
+  if (code <= 67 || (code >= 80 && code <= 82)) return { condition: 'rain', english: 'rain', icon: 'rainy' };
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return { condition: 'snow', english: 'snow', icon: 'ac_unit' };
+  if (code >= 95) return { condition: 'thunderstorm', english: 'thunderstorm', icon: 'thunderstorm' };
+  return { condition: 'clouds', english: 'cloudy', icon: 'cloud' };
+}
+
+// Live weather from Open-Meteo. It works without exposing or maintaining a client API key.
 app.get('/api/weather', async (req, res) => {
   try {
-    const city = req.query.city as string;
-    const lat = req.query.lat as string;
-    const lon = req.query.lon as string;
+    const requestedCity = typeof req.query.city === 'string' ? req.query.city : '';
+    const requestedLat = Number(req.query.lat);
+    const requestedLon = Number(req.query.lon);
+    const hasCoordinates = Number.isFinite(requestedLat) && Number.isFinite(requestedLon)
+      && requestedLat >= -90 && requestedLat <= 90 && requestedLon >= -180 && requestedLon <= 180;
+    const knownCity = cityLocations[requestedCity] || cityLocations.Yangon;
+    const latitude = hasCoordinates ? requestedLat : knownCity.lat;
+    const longitude = hasCoordinates ? requestedLon : knownCity.lon;
+    const cityName = hasCoordinates ? 'Current location' : (cityLocations[requestedCity] ? requestedCity : 'Yangon');
+    const cityBurmese = hasCoordinates ? 'လက်ရှိတည်နေရာ' : knownCity.burmese;
 
-    const apiKey = process.env.WEATHER_API_KEY;
-
-    if (!apiKey) {
-      // Fallback to mock data if no API key
-      const fallback: Record<string, any> = {
-        'Yangon': { temp: 32, humidity: 78, wind: 14, condition: 'rain', rainPct: 65, icon: '10d', desc: 'light rain' },
-        'Mandalay': { temp: 36, humidity: 45, wind: 10, condition: 'clear', rainPct: 10, icon: '01d', desc: 'clear sky' },
-        'Naypyidaw': { temp: 30, humidity: 60, wind: 8, condition: 'clouds', rainPct: 30, icon: '04d', desc: 'overcast clouds' },
+    const params = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      current: 'temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m',
+      timezone: 'auto',
+      forecast_days: '1',
+    });
+    const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+    if (!weatherResponse.ok) throw new Error(`Open-Meteo returned ${weatherResponse.status}`);
+    const weather = await weatherResponse.json() as {
+      current?: {
+        temperature_2m?: number;
+        relative_humidity_2m?: number;
+        precipitation_probability?: number;
+        weather_code?: number;
+        wind_speed_10m?: number;
       };
-
-      let cityKey = 'Yangon';
-      if (city && fallback[city]) cityKey = city;
-      else if (city) cityKey = 'Yangon';
-
-      const data = fallback[cityKey];
-      const condMain = data.condition;
-      const condBurmese = weatherConditionBurmese[condMain] || 'ပုံမှန်ရာသီဥတု';
-      const advice = getBusinessAdvice(condMain, data.temp, data.rainPct);
-
-      return res.json({
-        city: cityKey,
-        cityBurmese: cityKey === 'Yangon' ? 'ရန်ကုန်မြို့' : cityKey === 'Mandalay' ? 'မန္တလေးမြို့' : 'နေပြည်တော်',
-        tempCelsius: data.temp,
-        conditionBurmese: `${condBurmese} (${data.desc})`,
-        conditionEnglish: data.desc,
-        iconName: mapWeatherIcon(data.icon),
-        rainProbabilityPercent: data.rainPct,
-        humidityPercent: data.humidity,
-        windSpeedKmh: data.wind,
-        stormWarning: condMain === 'thunderstorm' ? 'မိုးကြိုးမုန်တိုင်းကျရောက်နိုင်ပါသည်။ သတိထားပါ။' : undefined,
-        voiceAnnouncementBurmese: `${cityKey}မြို့၏ ယနေ့ရာသီဥတုမှာ အပူချိန် ${data.temp}ဒီဂရီဆဲလ်စီးယပ်စ်ရှိပြီး ${data.desc}၊ မိုးရွာနိုင်ခြေ ${data.rainPct}ရာခိုင်နှုန်းရှိပါသည်။`,
-        businessAdviceBurmese: advice.burmese,
-        businessAdviceEnglish: advice.english,
-      });
-    }
-
-    // Build OpenWeatherMap URL
-    let url = `https://api.openweathermap.org/data/2.5/weather?appid=${apiKey}&units=metric`;
-    if (city) url += `&q=${encodeURIComponent(city)}`;
-    else if (lat && lon) url += `&lat=${lat}&lon=${lon}`;
-    else url += '&q=Yangon';
-
-    const owmRes = await fetch(url);
-    if (!owmRes.ok) {
-      return res.status(owmRes.status).json({ error: 'Weather API error' });
-    }
-
-    const owm = await owmRes.json();
-    const condMain = (owm.weather[0]?.main || 'Clouds').toLowerCase();
-    const desc = owm.weather[0]?.description || 'overcast clouds';
-    const condBurmese = weatherConditionBurmese[condMain] || 'ပုံမှန်ရာသီဥတု';
-    const rainPct = owm.clouds?.all || (owm.rain ? Math.min(owm.rain['1h'] || 50, 100) : 0);
-    const advice = getBusinessAdvice(condMain, owm.main.temp, rainPct);
-    const cityName = owm.name || city || 'Yangon';
-
-    // Storm warning check
-    let stormWarning: string | undefined;
-    if (condMain === 'thunderstorm' || (owm.main.temp >= 38 && rainPct > 60)) {
-      stormWarning = 'မိုးကြိုးမုန်တိုင်းကျရောက်နိုင်ပါသည်။ ဆိုင်ကုန်ပစ္စည်းများကိုကာကွယ်ထားပါ။';
-    }
-
-    // City name in Burmese (simplified mapping)
-    const cityBurmeseMap: Record<string, string> = {
-      'Yangon': 'ရန်ကုန်မြို့', 'Mandalay': 'မန္တလေးမြို့', 'Naypyidaw': 'နေပြည်တော်',
-      'Bago': 'ပဲခူးမြို့', 'Mawlamyine': 'မော်လမြိုင်မြို့', 'Taunggyi': 'တောင်ကြီးမြို့',
-      'Myitkyina': 'မြစ်ကြီးနားမြို့', 'Sittwe': 'စစ်တွေမြို့', 'Pathein': 'ပုသိမ်မြို့',
-      'Pyin Oo Lwin': 'ပြင်ဦးလွင်မြို့',
     };
+    if (!weather.current) throw new Error('Open-Meteo returned no current conditions');
+
+    const temperature = Math.round(Number(weather.current.temperature_2m) || 0);
+    const humidity = Math.round(Number(weather.current.relative_humidity_2m) || 0);
+    const rainProbability = Math.max(0, Math.min(100, Math.round(Number(weather.current.precipitation_probability) || 0)));
+    const windSpeed = Math.max(0, Math.round(Number(weather.current.wind_speed_10m) || 0));
+    const details = weatherCodeDetails(Number(weather.current.weather_code) || 0);
+    const conditionBurmese = weatherConditionBurmese[details.condition] || 'ပုံမှန်ရာသီဥတု';
+    const advice = getBusinessAdvice(details.condition, temperature, rainProbability);
+    const stormWarning = details.condition === 'thunderstorm'
+      ? 'မိုးကြိုးမုန်တိုင်း ဖြစ်နိုင်ပါသည်။ ဆိုင်နှင့် ကုန်ပစ္စည်းများကို ကာကွယ်ထားပါ။'
+      : undefined;
 
     return res.json({
       city: cityName,
-      cityBurmese: cityBurmeseMap[cityName] || `${cityName}မြို့`,
-      tempCelsius: Math.round(owm.main.temp),
-      conditionBurmese: `${condBurmese} (${desc})`,
-      conditionEnglish: desc,
-      iconName: mapWeatherIcon(owm.weather[0]?.icon || '01d'),
-      rainProbabilityPercent: rainPct,
-      humidityPercent: owm.main.humidity,
-      windSpeedKmh: Math.round(owm.wind.speed * 3.6),
+      cityBurmese,
+      tempCelsius: temperature,
+      conditionBurmese,
+      conditionEnglish: details.english,
+      iconName: details.icon,
+      rainProbabilityPercent: rainProbability,
+      humidityPercent: humidity,
+      windSpeedKmh: windSpeed,
       stormWarning,
-      voiceAnnouncementBurmese: `${cityBurmeseMap[cityName] || `${cityName}မြို့`}၏ ယနေ့ရာသီဥတုမှာ အပူချိန် ${Math.round(owm.main.temp)}ဒီဂရီဆဲလ်စီးယပ်စ်ရှိပြီး ${desc}၊ မိုးရွာနိုင်ခြေ ${rainPct}ရာခိုင်နှုန်းရှိပါသည်။`,
+      voiceAnnouncementBurmese: `${cityBurmese}၏ လက်ရှိအပူချိန် ${temperature} ဒီဂရီဆဲလ်စီးယပ်စ်၊ ${conditionBurmese}၊ မိုးရွာနိုင်ခြေ ${rainProbability} ရာခိုင်နှုန်းရှိပါသည်။`,
       businessAdviceBurmese: advice.burmese,
       businessAdviceEnglish: advice.english,
     });
   } catch (error) {
-    console.error('Error in /api/weather:', error);
-    return res.status(500).json({ error: 'Failed to fetch weather data' });
+    console.error('Live weather lookup failed:', error);
+    return res.status(502).json({ error: 'Live weather is temporarily unavailable' });
   }
 });
 

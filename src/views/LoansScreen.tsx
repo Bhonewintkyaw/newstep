@@ -92,13 +92,10 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
       setIsLoading(true);
       setSearchError('');
       const { lat, lng } = location;
-      const query = `[out:json][timeout:25];(
-        nwr(around:15000,${lat},${lng})["amenity"="bank"];
-        nwr(around:15000,${lat},${lng})["office"~"financial|microfinance|ngo"];
-        nwr(around:15000,${lat},${lng})["name"~"microfinance|micro finance|NGO|foundation",i];
-      );out center tags;`;
+      const cacheKey = `first-step:finance:${lat.toFixed(2)}:${lng.toFixed(2)}`;
       try {
-        const response = await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`, {
+        const search = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+        const response = await fetch(`/api/finance/nearby?${search.toString()}`, {
           signal: controller.signal,
         });
         if (!response.ok) throw new Error('Search service unavailable');
@@ -125,9 +122,24 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
           }];
         }).sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 30);
         setOrganizations(results);
+        try {
+          window.localStorage.setItem(cacheKey, JSON.stringify(results));
+        } catch {
+          // The live results remain usable even when browser storage is unavailable.
+        }
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
-          setSearchError(t('အနီးရှိအဖွဲ့အစည်းများကို ယခုရှာမရပါ။ ထပ်မံကြိုးစားပါ။', 'Nearby search is temporarily unavailable. Please try again.'));
+          try {
+            const cached = JSON.parse(window.localStorage.getItem(cacheKey) || '[]');
+            if (Array.isArray(cached) && cached.length > 0) {
+              setOrganizations(cached);
+              setSearchError(t('တိုက်ရိုက်ရှာဖွေမှု မရသဖြင့် နောက်ဆုံးသိမ်းထားသော ရလဒ်များကို ပြထားပါသည်။', 'Live search is unavailable, so the last saved results are shown.'));
+            } else {
+              setSearchError(t('အနီးရှိအဖွဲ့အစည်းများကို ယခုရှာမရပါ။ ထပ်မံကြိုးစားပါ။', 'Nearby search is temporarily unavailable. Please try again.'));
+            }
+          } catch {
+            setSearchError(t('အနီးရှိအဖွဲ့အစည်းများကို ယခုရှာမရပါ။ ထပ်မံကြိုးစားပါ။', 'Nearby search is temporarily unavailable. Please try again.'));
+          }
         }
       } finally {
         if (!controller.signal.aborted) setIsLoading(false);
@@ -192,6 +204,7 @@ export const LoansScreen: React.FC<LoansScreenProps> = ({
             }))}
             center={location ?? { lat: 19.7633, lng: 96.0785 }}
             zoom={location ? 14 : 6}
+            language={language}
             onLocationChange={(nextLocation) => setLocation({ lat: nextLocation.lat, lng: nextLocation.lng })}
             onMarkerClick={(id) => {
               const organization = organizations.find((item) => item.id === id);

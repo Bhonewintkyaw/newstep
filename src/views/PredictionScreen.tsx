@@ -45,12 +45,13 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
       const data: WeatherData = await res.json();
       setCurrentWeather(data);
     } catch {
-      // Fallback to initial data or keep current
-      if (params.city === 'Yangon' || !params.city) setCurrentWeather(initialWeather);
+      setLocationMessage(language === 'my'
+        ? 'တိုက်ရိုက်ရာသီဥတုအချက်အလက်ကို ယခုရယူ၍မရပါ။ ထပ်မံကြိုးစားပါ။'
+        : 'Live weather is temporarily unavailable. Please try again.');
     } finally {
       setIsLoadingWeather(false);
     }
-  }, [initialWeather]);
+  }, [language]);
 
   useEffect(() => {
     if (!isLocating) fetchWeather({ city: 'Yangon' });

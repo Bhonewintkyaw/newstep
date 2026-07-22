@@ -77,6 +77,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
     if (!newTitle || !newAmount) return;
 
     const amt = Number(newAmount);
+    if (!Number.isFinite(amt) || amt <= 0) return;
     const estProfit = newType === 'sale' ? Math.round(amt * 0.22) : 0;
 
     onAddTransaction({
@@ -367,7 +368,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
               <div>
                 <label className="text-xs font-bold text-gray-600 block mb-1">{t('ပမာဏ (ကျပ်)', 'Amount (MMK)')}</label>
-                <input type="number" required placeholder="150000" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="w-full h-11 px-3.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-[#00535b]" />
+                <input type="number" min="1" step="1" required placeholder={t('ငွေပမာဏ', 'Amount in MMK')} value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="w-full h-11 px-3.5 border border-gray-300 rounded-xl text-sm outline-none focus:border-[#00535b]" />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

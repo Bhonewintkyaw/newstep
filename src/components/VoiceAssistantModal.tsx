@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { VoiceProcessResult } from '../types';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { VoiceProcessResult } from '../types';
 
 interface VoiceAssistantModalProps {
   isOpen: boolean;
@@ -7,6 +7,39 @@ interface VoiceAssistantModalProps {
   onApplyVoiceActionResult: (result: VoiceProcessResult) => void;
   language: 'my' | 'en';
 }
+
+interface SpeechRecognitionResultLike {
+  readonly isFinal: boolean;
+  readonly 0: { transcript: string };
+}
+
+interface SpeechRecognitionEventLike {
+  readonly resultIndex: number;
+  readonly results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorLike {
+  readonly error: string;
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+const isFinancialAction = (result: VoiceProcessResult) => (
+  result.action === 'RECORD_SALE' || result.action === 'RECORD_PURCHASE'
+);
 
 export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   isOpen,
@@ -18,245 +51,236 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [transcriptInput, setTranscriptInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeResult, setActiveResult] = useState<VoiceProcessResult | null>(null);
+  const [error, setError] = useState('');
+  const [isApplied, setIsApplied] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const finalTranscriptRef = useRef('');
+
+  const t = useCallback((my: string, en: string) => language === 'my' ? my : en, [language]);
+
+  const stopRecognition = useCallback((abort = false) => {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    recognitionRef.current = null;
+    if (abort) recognition.abort();
+    else recognition.stop();
+    setIsListening(false);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       setTranscriptInput('');
       setActiveResult(null);
+      setError('');
+      setIsApplied(false);
+      return;
     }
-  }, [isOpen]);
+    stopRecognition(true);
+    window.speechSynthesis?.cancel();
+  }, [isOpen, stopRecognition]);
+
+  useEffect(() => () => {
+    recognitionRef.current?.abort();
+    window.speechSynthesis?.cancel();
+  }, []);
+
+  const speakResult = useCallback((result: VoiceProcessResult) => {
+    if (!('speechSynthesis' in window)) return;
+    const text = language === 'my' ? result.replyBurmese : result.replyEnglish;
+    if (!text) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = language === 'my' ? 'my-MM' : 'en-US';
+    utterance.rate = 0.92;
+    const matchingVoice = window.speechSynthesis.getVoices().find((voice) => (
+      voice.lang.toLowerCase().startsWith(language === 'my' ? 'my' : 'en')
+    ));
+    if (matchingVoice) utterance.voice = matchingVoice;
+    window.speechSynthesis.speak(utterance);
+  }, [language]);
+
+  const handleProcessText = useCallback(async (textToSend: string) => {
+    const transcript = textToSend.trim();
+    if (!transcript || isLoading) return;
+    setIsLoading(true);
+    setIsListening(false);
+    setActiveResult(null);
+    setIsApplied(false);
+    setError('');
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
+    try {
+      const response = await fetch('/api/ai/voice-process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, currentLanguage: language }),
+        signal: controller.signal,
+      });
+      const payload = await response.json() as VoiceProcessResult & { error?: string };
+      if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
+      if (!payload.action || !payload.replyBurmese || !payload.replyEnglish) {
+        throw new Error('The assistant returned an invalid response.');
+      }
+
+      setActiveResult(payload);
+      speakResult(payload);
+      if (!isFinancialAction(payload) && payload.action !== 'GENERAL_QUERY') {
+        onApplyVoiceActionResult(payload);
+        setIsApplied(true);
+      }
+    } catch (requestError) {
+      const message = requestError instanceof DOMException && requestError.name === 'AbortError'
+        ? t('တောင်းဆိုမှု အချိန်ကြာလွန်းပါသည်။ ထပ်မံကြိုးစားပါ။', 'The request timed out. Please try again.')
+        : t('အသံအကူအညီဆာဗာနှင့် ချိတ်ဆက်မရပါ။ ထပ်မံကြိုးစားပါ။', 'Could not reach the voice assistant. Please try again.');
+      setError(message);
+      console.error('Voice assistant request failed:', requestError);
+    } finally {
+      window.clearTimeout(timeoutId);
+      setIsLoading(false);
+    }
+  }, [isLoading, language, onApplyVoiceActionResult, speakResult, t]);
+
+  const startSpeechRecognition = useCallback(() => {
+    const speechWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) {
+      setError(t(
+        'ဤဘရောက်ဇာတွင် အသံဖမ်းစနစ် မပါဝင်ပါ။ Chrome သို့မဟုတ် Edge ကိုသုံးပါ၊ သို့မဟုတ် အောက်တွင် စာရိုက်ပါ။',
+        'Speech recognition is unavailable here. Use Chrome or Edge, or type your command below.',
+      ));
+      return;
+    }
+
+    setError('');
+    setActiveResult(null);
+    finalTranscriptRef.current = '';
+    const recognition = new Recognition();
+    recognition.lang = language === 'my' ? 'my-MM' : 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+      let finalText = finalTranscriptRef.current;
+      let interimText = '';
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (result.isFinal) finalText += `${result[0].transcript} `;
+        else interimText += result[0].transcript;
+      }
+      finalTranscriptRef.current = finalText;
+      setTranscriptInput(`${finalText}${interimText}`.trim());
+    };
+    recognition.onerror = (event) => {
+      recognitionRef.current = null;
+      finalTranscriptRef.current = '';
+      setIsListening(false);
+      const messages: Record<string, [string, string]> = {
+        'not-allowed': ['မိုက်ခရိုဖုန်းအသုံးပြုခွင့် ပေးရန်လိုပါသည်။', 'Allow microphone access to use voice commands.'],
+        'audio-capture': ['မိုက်ခရိုဖုန်းကို ရှာမတွေ့ပါ။', 'No microphone was found.'],
+        'no-speech': ['စကားသံ မကြားရပါ။ မိုက်ကိုနှိပ်ပြီး ထပ်ပြောပါ။', 'No speech was detected. Tap the microphone and try again.'],
+        network: ['အသံဖမ်းဝန်ဆောင်မှုနှင့် ချိတ်ဆက်မရပါ။', 'The speech recognition service is unavailable.'],
+      };
+      const localized = messages[event.error] || ['အသံဖမ်းမှု မအောင်မြင်ပါ။ ထပ်မံကြိုးစားပါ။', 'Speech recognition failed. Please try again.'];
+      setError(language === 'my' ? localized[0] : localized[1]);
+    };
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setIsListening(false);
+      const completedTranscript = finalTranscriptRef.current.trim();
+      finalTranscriptRef.current = '';
+      if (completedTranscript) void handleProcessText(completedTranscript);
+    };
+
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      recognitionRef.current = null;
+      setIsListening(false);
+      setError(t('မိုက်ခရိုဖုန်းကို စတင်၍မရပါ။ ထပ်မံကြိုးစားပါ။', 'Could not start the microphone. Please try again.'));
+    }
+  }, [handleProcessText, language, t]);
 
   if (!isOpen) return null;
 
   const quickPrompts = [
-    { labelBurmese: 'ဆန် ၅ အိတ် ရောင်းရသည်', labelEnglish: 'Sold 5 bags of rice' },
-    { labelBurmese: 'ဆီ ၃ ပုလင်း ဝယ်ယူသည်', labelEnglish: 'Bought 3 bottles of cooking oil' },
-    { labelBurmese: 'ချေးငွေ အခြေအနေ ဘယ်လိုလဲ', labelEnglish: 'Check current loan status' },
-    { labelBurmese: 'ယနေ့ မိုးလေဝသ ပြောပြပါ', labelEnglish: 'Today weather forecast' },
+    { my: 'ချေးငွေနှင့် ဘဏ်များ ကြည့်မည်', en: 'Open loans and nearby banks' },
+    { my: 'ယနေ့ ရာသီဥတု ကြည့်မည်', en: 'Open today’s weather' },
+    { my: 'ကုန်ပစ္စည်းစာရင်း ကြည့်မည်', en: 'Open inventory records' },
   ];
 
-  const handleProcessText = async (textToSend: string) => {
-    if (!textToSend.trim()) return;
-    setIsLoading(true);
-    setIsListening(false);
-
-    try {
-      const res = await fetch('/api/ai/voice-process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript: textToSend,
-          currentLanguage: language,
-        }),
-      });
-
-      const data: VoiceProcessResult = await res.json();
-      setActiveResult(data);
-      onApplyVoiceActionResult(data);
-
-      // Web Speech Synthesis TTS feedback if supported
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const textToSpeak = language === 'my' ? data.replyBurmese : data.replyEnglish;
-        const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.rate = 0.95;
-        window.speechSynthesis.speak(utterance);
-      }
-    } catch (err) {
-      console.error('Error processing voice request:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const startSpeechRecognition = () => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert(
-        language === 'my'
-          ? 'သင့်ဘရောက်ဇာတွင် အသံဖမ်းစနစ် မပါဝင်သေးပါ။ ကျေးဇူးပြု၍ အောက်ပါ စာသားခလုတ်များကို နှိပ်ပါ။'
-          : 'Speech recognition is not supported in this browser window. Please tap the quick voice prompt chips below.'
-      );
-      return;
-    }
-
-    try {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.lang = language === 'my' ? 'my-MM' : 'en-US';
-      recognition.interimResults = true;
-
-      setIsListening(true);
-
-      recognition.onresult = (event: any) => {
-        const text = event.results[0][0].transcript;
-        setTranscriptInput(text);
-      };
-
-      recognition.onerror = () => {
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognition.start();
-    } catch {
-      setIsListening(false);
-    }
+  const confirmFinancialRecord = () => {
+    if (!activeResult || !isFinancialAction(activeResult) || isApplied) return;
+    onApplyVoiceActionResult(activeResult);
+    setIsApplied(true);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div
-        className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl flex flex-col gap-5 border border-[#00535b]/20 relative max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-xs sm:items-center sm:p-4">
+      <section aria-modal="true" aria-labelledby="voice-assistant-title" role="dialog" onClick={(event) => event.stopPropagation()} className="relative flex max-h-[92vh] w-full max-w-lg flex-col gap-5 overflow-y-auto rounded-t-3xl border border-[#00535b]/20 bg-white p-6 shadow-2xl sm:rounded-3xl">
+        <header className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#00535b] text-2xl animate-pulse">
-              auto_awesome
-            </span>
-            <h3 className="font-bold text-lg text-[#00201e]">
-              {language === 'my' ? 'AI အသံ မန်နေဂျာ (Voice Assistant)' : 'AI Voice Assistant'}
-            </h3>
+            <span aria-hidden="true" className="material-symbols-outlined animate-pulse text-2xl text-[#00535b]">auto_awesome</span>
+            <h2 id="voice-assistant-title" className="text-lg font-bold text-[#00201e]">{t('AI အသံအကူအညီ', 'AI Voice Assistant')}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
+          <button type="button" onClick={onClose} aria-label={t('ပိတ်မည်', 'Close')} className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"><span aria-hidden="true" className="material-symbols-outlined">close</span></button>
+        </header>
 
-        {/* Central Mic Button */}
-        <div className="flex flex-col items-center justify-center py-2">
+        <div className="flex flex-col items-center py-1">
           <div className="relative">
-            {isListening && (
-              <div className="absolute inset-0 bg-[#00535b]/30 rounded-full scale-150 animate-ping" />
-            )}
+            {isListening && <div className="absolute inset-0 scale-150 animate-ping rounded-full bg-[#00535b]/30" />}
             <button
-              onClick={() => {
-                if (isListening) {
-                  setIsListening(false);
-                } else {
-                  startSpeechRecognition();
-                }
-              }}
-              className={`w-28 h-28 rounded-full flex items-center justify-center text-white shadow-xl relative z-10 transition-all duration-200 active:scale-95 ${
-                isListening ? 'bg-[#ffba27] pulse-gold' : 'bg-[#00535b] voice-pulse'
-              }`}
+              type="button"
+              onClick={() => isListening ? stopRecognition() : startSpeechRecognition()}
+              disabled={isLoading}
+              aria-label={isListening ? t('အသံဖမ်းမှု ရပ်မည်', 'Stop listening') : t('အသံဖမ်းမည်', 'Start listening')}
+              className={`voice-pulse relative z-10 flex h-28 w-28 items-center justify-center rounded-full text-white shadow-xl transition active:scale-95 disabled:opacity-50 ${isListening ? 'bg-[#ffba27] text-[#00201e]' : 'bg-[#00535b]'}`}
             >
-              <span className="material-symbols-outlined text-5xl fill">
-                {isListening ? 'hearing' : 'mic'}
-              </span>
+              <span aria-hidden="true" className="material-symbols-outlined fill text-5xl">{isListening ? 'stop' : 'mic'}</span>
             </button>
           </div>
-
-          <p className="mt-4 font-bold text-lg text-[#00201e] text-center">
-            {isListening
-              ? language === 'my'
-                ? 'နားထောင်နေပါသည်... စကားပြောပါ'
-                : 'Listening... Speak now'
-              : language === 'my'
-              ? 'ကျွန်ုပ်ကို မေးမြန်းပါ (Ask Me Anything)'
-              : 'Ask Me Anything'}
-          </p>
-          <span className="text-xs text-[#3e494a] bg-[#b7fbf3]/50 px-3 py-1 rounded-full mt-1">
-            {language === 'my' ? 'အသံဖြင့် ခိုင်းစေရုံဖြင့် အရာရာလွယ်ကူစေမည်' : 'Tap mic or quick prompt below'}
-          </span>
+          <p className="mt-4 text-center text-lg font-bold text-[#00201e]">{isListening ? t('နားထောင်နေပါသည်… စကားပြောပါ', 'Listening… Speak now') : t('မိုက်ကိုနှိပ်ပြီး စကားပြောပါ', 'Tap the microphone and speak')}</p>
+          <p className="mt-1 text-center text-xs text-[#3e494a]">{t('အရောင်း/အဝယ်အတွက် ပစ္စည်းနှင့် စုစုပေါင်းကျပ်ငွေကို အတိအကျပြောပါ', 'For sales or purchases, include the item and exact total MMK amount.')}</p>
         </div>
 
-        {/* Manual text input or voice result display */}
-        <div className="space-y-3">
-          <div className="relative flex items-center">
-            <input
-              type="text"
-              value={transcriptInput}
-              onChange={(e) => setTranscriptInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleProcessText(transcriptInput);
-                }
-              }}
-              placeholder={
-                language === 'my'
-                  ? 'ဥပမာ: "ဆန် ၅ အိတ် ရောင်းရသည်" သို့မဟုတ် စာရိုက်ပါ...'
-                  : 'Type or speak command (e.g., Sold 5 bags of rice)...'
-              }
-              className="w-full h-12 pl-4 pr-12 bg-gray-50 border border-[#bec8ca] focus:border-[#00535b] focus:bg-white rounded-xl text-sm font-medium outline-none transition-all"
-            />
-            <button
-              onClick={() => handleProcessText(transcriptInput)}
-              disabled={isLoading || !transcriptInput.trim()}
-              className="absolute right-2 p-2 text-[#00535b] hover:bg-[#e4fffb] disabled:opacity-30 rounded-lg transition-colors"
-            >
-              <span className="material-symbols-outlined">send</span>
-            </button>
-          </div>
+        <form onSubmit={(event) => { event.preventDefault(); void handleProcessText(transcriptInput); }} className="relative flex items-center">
+          <label htmlFor="voice-command" className="sr-only">{t('အသံအမိန့်စာသား', 'Voice command')}</label>
+          <input id="voice-command" value={transcriptInput} onChange={(event) => setTranscriptInput(event.target.value)} disabled={isLoading} placeholder={t('ဥပမာ - ဆန်ရောင်း၊ စုစုပေါင်း ၅၀၀၀၀ ကျပ်', 'Example: Sold rice, total 50,000 MMK')} className="h-12 w-full rounded-xl border border-[#bec8ca] bg-gray-50 pl-4 pr-12 text-sm font-medium outline-none transition focus:border-[#00535b] focus:bg-white" />
+          <button type="submit" disabled={isLoading || !transcriptInput.trim()} aria-label={t('ပို့မည်', 'Send command')} className="absolute right-2 rounded-lg p-2 text-[#00535b] hover:bg-[#e4fffb] disabled:opacity-30"><span aria-hidden="true" className="material-symbols-outlined">send</span></button>
+        </form>
 
-          {/* Quick Prompts Chips */}
-          <div>
-            <p className="text-xs font-bold text-[#3e494a] mb-2 uppercase tracking-wider">
-              {language === 'my' ? 'အလွယ်တကူ စမ်းသပ်ရန် စကားစုများ:' : 'Quick Voice Prompts:'}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {quickPrompts.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    const text = language === 'my' ? item.labelBurmese : item.labelEnglish;
-                    setTranscriptInput(text);
-                    handleProcessText(text);
-                  }}
-                  className="px-3 py-1.5 bg-[#e4fffb] hover:bg-[#b1f5ed] border border-[#00535b]/20 text-[#00535b] text-xs font-medium rounded-full active:scale-95 transition-all text-left flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-sm">mic</span>
-                  <span>{language === 'my' ? item.labelBurmese : item.labelEnglish}</span>
-                </button>
-              ))}
-            </div>
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[#3e494a]">{t('အမြန်လုပ်ဆောင်ချက်များ', 'Quick actions')}</p>
+          <div className="flex flex-wrap gap-2">
+            {quickPrompts.map((prompt) => {
+              const text = language === 'my' ? prompt.my : prompt.en;
+              return <button key={prompt.en} type="button" onClick={() => { setTranscriptInput(text); void handleProcessText(text); }} disabled={isLoading} className="rounded-full border border-[#00535b]/20 bg-[#e4fffb] px-3 py-2 text-left text-xs font-medium text-[#00535b] transition hover:bg-[#b1f5ed] disabled:opacity-50">{text}</button>;
+            })}
           </div>
         </div>
 
-        {/* Loading Spinner */}
-        {isLoading && (
-          <div className="flex items-center justify-center gap-3 py-4 bg-[#b7fbf3]/30 rounded-2xl border border-[#00535b]/10">
-            <div className="w-5 h-5 border-2 border-[#00535b] border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm font-semibold text-[#00535b]">
-              {language === 'my' ? 'AI မန်နေဂျာမှ စနစ်ပြင်ဆင်နေပါသည်...' : 'AI Manager is processing...'}
-            </span>
-          </div>
-        )}
+        {isLoading && <div className="flex items-center justify-center gap-3 rounded-2xl border border-[#00535b]/10 bg-[#b7fbf3]/30 py-4"><div className="h-5 w-5 animate-spin rounded-full border-2 border-[#00535b] border-t-transparent" /><span className="text-sm font-semibold text-[#00535b]">{t('လုပ်ဆောင်နေပါသည်…', 'Processing…')}</span></div>}
+        {error && <div role="alert" className="rounded-2xl bg-[#ffdad6] px-4 py-3 text-sm font-semibold text-[#93000a]">{error}</div>}
 
-        {/* Result Feedback Banner */}
         {activeResult && !isLoading && (
-          <div className="p-4 bg-[#e4fffb] border border-[#00535b]/20 rounded-2xl space-y-2 animate-in fade-in duration-300">
-            <div className="flex items-center gap-2 text-[#00535b]">
-              <span className="material-symbols-outlined fill text-xl">check_circle</span>
-              <span className="font-bold text-sm">
-                {language === 'my' ? 'AI တုံ့ပြန်ချက်:' : 'AI Result:'}
-              </span>
-            </div>
-            <p className="text-sm font-semibold text-[#00201e]">
-              {language === 'my' ? activeResult.replyBurmese : activeResult.replyEnglish}
-            </p>
-            {activeResult.amount ? (
-              <div className="text-xs font-bold px-2.5 py-1 bg-[#006d77]/10 text-[#00535b] rounded-md inline-block">
-                {activeResult.action === 'RECORD_SALE' ? '+' : '-'} {activeResult.amount.toLocaleString()} MMK
-              </div>
-            ) : null}
+          <div className="space-y-3 rounded-2xl border border-[#00535b]/20 bg-[#e4fffb] p-4">
+            <div className="flex items-center gap-2 font-bold text-[#00535b]"><span aria-hidden="true" className="material-symbols-outlined">{isApplied ? 'check_circle' : 'fact_check'}</span><span>{isFinancialAction(activeResult) && !isApplied ? t('မသိမ်းမီ စစ်ဆေးပါ', 'Review before saving') : t('အသံအကူအညီ အဖြေ', 'Assistant result')}</span></div>
+            <p className="text-sm font-semibold text-[#00201e]">{language === 'my' ? activeResult.replyBurmese : activeResult.replyEnglish}</p>
+            {activeResult.amount ? <div className="inline-block rounded-md bg-[#006d77]/10 px-2.5 py-1 text-sm font-bold text-[#00535b]">{activeResult.itemName || t('စာရင်း', 'Record')} · {activeResult.amount.toLocaleString()} MMK</div> : null}
+            {isFinancialAction(activeResult) && (
+              <button type="button" onClick={confirmFinancialRecord} disabled={isApplied} className="w-full rounded-xl bg-[#00535b] px-4 py-3 text-sm font-bold text-white disabled:bg-[#6f797a]">{isApplied ? t('စာရင်းသွင်းပြီးပါပြီ', 'Record saved') : t('ဤစာရင်းကို သိမ်းမည်', 'Save this record')}</button>
+            )}
           </div>
         )}
 
-        <button
-          onClick={onClose}
-          className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-[#00201e] font-bold rounded-xl text-sm transition-colors mt-1"
-        >
-          {language === 'my' ? 'ပိတ်မည် (Close)' : 'Close'}
-        </button>
-      </div>
+        <button type="button" onClick={onClose} className="w-full rounded-xl bg-gray-100 py-3 text-sm font-bold text-[#00201e] hover:bg-gray-200">{t('ပိတ်မည်', 'Close')}</button>
+      </section>
     </div>
   );
 };

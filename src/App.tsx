@@ -39,6 +39,8 @@ export default function App() {
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const [isUserDataLoaded, setIsUserDataLoaded] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerToast = useCallback((msg: string) => {
@@ -55,22 +57,63 @@ export default function App() {
     if (!firebaseAuth) return;
     return onAuthStateChanged(firebaseAuth, (firebaseUser) => {
       if (!firebaseUser) {
+        setActiveUserId(null);
+        setIsUserDataLoaded(false);
         setCurrentTab('onboarding');
         return;
       }
-      setUserProfile((profile) => ({
-        ...profile,
-        name: firebaseUser.displayName || profile.name || 'User',
-        phone: firebaseUser.phoneNumber || profile.phone,
-      }));
+      const storageKey = `first-step:user:${firebaseUser.uid}`;
+      let saved: Partial<{
+        userProfile: UserProfile;
+        registeredLoanProfile: RegisteredLoanProfile | null;
+        inventory: InventoryItem[];
+        lowStockAlerts: LowStockAlert[];
+        transactions: TransactionItem[];
+      }> = {};
+      try {
+        saved = JSON.parse(window.localStorage.getItem(storageKey) || '{}');
+      } catch {
+        window.localStorage.removeItem(storageKey);
+      }
+      setUserProfile({
+        ...emptyUserProfile,
+        ...(saved.userProfile || {}),
+        name: firebaseUser.displayName || saved.userProfile?.name || 'User',
+        phone: firebaseUser.phoneNumber || saved.userProfile?.phone || '',
+      });
+      setRegisteredLoanProfile(saved.registeredLoanProfile || null);
+      setInventory(Array.isArray(saved.inventory) ? saved.inventory : []);
+      setLowStockAlerts(Array.isArray(saved.lowStockAlerts) ? saved.lowStockAlerts : []);
+      setTransactions(Array.isArray(saved.transactions) ? saved.transactions : []);
+      setActiveUserId(firebaseUser.uid);
+      setIsUserDataLoaded(true);
       setCurrentTab('home');
     });
   }, []);
 
+  useEffect(() => {
+    if (!activeUserId || !isUserDataLoaded) return;
+    try {
+      window.localStorage.setItem(`first-step:user:${activeUserId}`, JSON.stringify({
+        userProfile,
+        registeredLoanProfile,
+        inventory,
+        lowStockAlerts,
+        transactions,
+      }));
+    } catch {
+      triggerToast(language === 'my' ? 'ဒေတာကို ဤစက်တွင် သိမ်း၍မရပါ' : 'Could not save data on this device');
+    }
+  }, [activeUserId, inventory, isUserDataLoaded, language, lowStockAlerts, registeredLoanProfile, transactions, triggerToast, userProfile]);
+
   const handleApplyVoiceResult = (result: VoiceProcessResult) => {
     if (result.action === 'RECORD_SALE' || result.action === 'RECORD_PURCHASE') {
       const isSale = result.action === 'RECORD_SALE';
-      const amount = result.amount ?? 0;
+      const amount = Number(result.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        triggerToast(language === 'my' ? 'မှန်ကန်သော ငွေပမာဏ လိုအပ်ပါသည်' : 'A valid amount is required');
+        return;
+      }
       const itemName = result.itemName?.trim() || (language === 'my' ? 'အရောင်းအဝယ်' : 'Transaction');
 
       const newTx: TransactionItem = {
@@ -94,6 +137,8 @@ export default function App() {
       );
     } else if (result.action === 'CHECK_LOAN') {
       setCurrentTab('loans');
+    } else if (result.action === 'CHECK_WEATHER') {
+      setCurrentTab('prediction');
     } else if (result.action === 'INVENTORY_INQUIRY') {
       setCurrentTab('inventory');
     }
@@ -124,6 +169,7 @@ export default function App() {
   };
 
   const handleResetData = () => {
+    if (activeUserId) window.localStorage.removeItem(`first-step:user:${activeUserId}`);
     if (firebaseAuth) void signOut(firebaseAuth);
     setTransactions([]);
     setLowStockAlerts([]);
@@ -167,11 +213,7 @@ export default function App() {
         {currentTab === 'onboarding' && (
           <OnboardingScreen
             onComplete={(username, phone) => {
-              setUserProfile({ ...emptyUserProfile, name: username, phone });
-              setRegisteredLoanProfile(null);
-              setInventory([]);
-              setLowStockAlerts([]);
-              setTransactions([]);
+              setUserProfile((profile) => ({ ...profile, name: username, phone }));
               setCurrentTab('home');
             }}
             language={language}

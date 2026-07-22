@@ -18,6 +18,7 @@ interface MapViewProps {
   className?: string;
   onMarkerClick: (id: string) => void;
   onLocationChange?: (location: { lat: number; lng: number; accuracy: number }) => void;
+  language?: 'my' | 'en';
 }
 
 // Fix Leaflet default icon issue
@@ -35,6 +36,7 @@ export const MapView: React.FC<MapViewProps> = ({
   className = '',
   onMarkerClick,
   onLocationChange,
+  language = 'en',
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -115,7 +117,7 @@ export const MapView: React.FC<MapViewProps> = ({
     }
 
     if (!navigator.geolocation) {
-      setLocationError('Location is not supported by this browser.');
+      setLocationError(language === 'my' ? 'ဤဘရောက်ဇာတွင် တည်နေရာစနစ် မပါဝင်ပါ။' : 'Location is not supported by this browser.');
       return;
     }
 
@@ -148,8 +150,8 @@ export const MapView: React.FC<MapViewProps> = ({
       },
       (error) => {
         setLocationError(error.code === error.PERMISSION_DENIED
-          ? 'Location permission was denied.'
-          : 'Unable to read your current location.');
+          ? (language === 'my' ? 'တည်နေရာအသုံးပြုခွင့် ပိတ်ထားပါသည်။' : 'Location permission was denied.')
+          : (language === 'my' ? 'လက်ရှိတည်နေရာကို မဖတ်နိုင်ပါ။' : 'Unable to read your current location.'));
         setIsTracking(false);
         watchIdRef.current = null;
       },
@@ -167,7 +169,9 @@ export const MapView: React.FC<MapViewProps> = ({
         className={`absolute z-[500] right-3 top-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-extrabold shadow-lg border cursor-pointer ${isTracking ? 'bg-[#00535b] text-white border-[#00535b]' : 'bg-white text-[#00535b] border-[#00535b]/20'}`}
       >
         <span className="material-symbols-outlined text-lg">{isTracking ? 'location_searching' : 'my_location'}</span>
-        <span>{isTracking ? 'Live location on' : 'Use my location'}</span>
+        <span>{isTracking
+          ? (language === 'my' ? 'တိုက်ရိုက်တည်နေရာ ဖွင့်ထားသည်' : 'Live location on')
+          : (language === 'my' ? 'ကျွန်ုပ်၏တည်နေရာ သုံးမည်' : 'Use my location')}</span>
       </button>
       {locationError && (
         <div role="alert" className="absolute z-[500] inset-x-3 bottom-3 rounded-xl bg-white px-3 py-2 text-xs font-bold text-[#ba1a1a] shadow-lg">
