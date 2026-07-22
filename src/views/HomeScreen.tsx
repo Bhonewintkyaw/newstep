@@ -128,11 +128,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <h3 className="text-base font-extrabold text-[#00535b] px-1">
           {language === 'my' ? 'အဓိက လုပ်ဆောင်ချက် (Main Functions)' : 'Main System Modules'}
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-3">
           {/* Module 1: Finance */}
           <div
             onClick={() => onSelectTab('loans')}
-            className="glass-card rounded-3xl p-6 flex flex-col justify-between h-52 shadow-xs hover:bg-[#b1f5ed] hover:shadow-md transition-all cursor-pointer border border-[#bec8ca]/30 group space-y-3"
+            className="glass-card group flex h-full min-h-72 flex-col rounded-3xl border border-[#bec8ca]/30 p-6 shadow-xs transition-all hover:bg-[#b1f5ed] hover:shadow-md cursor-pointer"
           >
             <div className="flex justify-between items-start">
               <div className="w-14 h-14 bg-[#ffad8f]/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -145,7 +145,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </span>
             </div>
 
-            <div>
+            <div className="mt-6 flex-1">
               <h4 className="font-extrabold text-lg text-[#00201e]">
                 {language === 'my' ? '၁။ ငွေရေးကြေးရေး (Finance)' : '1. Finance'}
               </h4>
@@ -156,7 +156,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-1 text-xs font-extrabold text-[#00535b] pt-1">
+            <div className="mt-6 flex items-center gap-1 text-xs font-extrabold text-[#00535b]">
               <span>{language === 'my' ? 'ဝင်ရောက်ကြည့်ရှုမည်' : 'Explore Finance'}</span>
               <span className="material-symbols-outlined text-base">arrow_forward</span>
             </div>
@@ -165,7 +165,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* Module 2: AI Prediction */}
           <div
             onClick={() => onSelectTab('prediction')}
-            className="glass-card rounded-3xl p-6 flex flex-col justify-between h-52 shadow-xs hover:bg-[#b1f5ed] hover:shadow-md transition-all cursor-pointer border border-[#bec8ca]/30 group space-y-3"
+            className="glass-card group flex h-full min-h-72 flex-col rounded-3xl border border-[#bec8ca]/30 p-6 shadow-xs transition-all hover:bg-[#b1f5ed] hover:shadow-md cursor-pointer"
           >
             <div className="flex justify-between items-start">
               <div className="w-14 h-14 bg-[#ffba27]/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -178,7 +178,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </span>
             </div>
 
-            <div>
+            <div className="mt-6 flex-1">
               <h4 className="font-extrabold text-lg text-[#00201e]">
                 {language === 'my' ? '၂။ AI ခန့်မှန်းချက် (AI Prediction)' : '2. AI Prediction'}
               </h4>
@@ -189,7 +189,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-1 text-xs font-extrabold text-[#00535b] pt-1">
+            <div className="mt-6 flex items-center gap-1 text-xs font-extrabold text-[#00535b]">
               <span>{language === 'my' ? 'ဝင်ရောက်ကြည့်ရှုမည်' : 'View Predictions'}</span>
               <span className="material-symbols-outlined text-base">arrow_forward</span>
             </div>
@@ -198,7 +198,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {/* Module 3: Inventory System */}
           <div
             onClick={() => onSelectTab('inventory')}
-            className="glass-card rounded-3xl p-6 flex flex-col justify-between h-52 shadow-xs hover:bg-[#b1f5ed] hover:shadow-md transition-all cursor-pointer border border-[#bec8ca]/30 group space-y-3"
+            className="glass-card group flex h-full min-h-72 flex-col rounded-3xl border border-[#bec8ca]/30 p-6 shadow-xs transition-all hover:bg-[#b1f5ed] hover:shadow-md cursor-pointer"
           >
             <div className="flex justify-between items-start">
               <div className="w-14 h-14 bg-[#006d77]/20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -211,7 +211,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </span>
             </div>
 
-            <div>
+            <div className="mt-6 flex-1">
               <h4 className="font-extrabold text-lg text-[#00201e]">
                 {language === 'my' ? '၃။ ကုန်ပစ္စည်းစနစ် (Inventory System)' : '3. Inventory System'}
               </h4>
@@ -222,7 +222,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-1 text-xs font-extrabold text-[#00535b] pt-1">
+            <div className="mt-6 flex items-center gap-1 text-xs font-extrabold text-[#00535b]">
               <span>{language === 'my' ? 'ဝင်ရောက်ကြည့်ရှုမည်' : 'Open Inventory'}</span>
               <span className="material-symbols-outlined text-base">arrow_forward</span>
             </div>

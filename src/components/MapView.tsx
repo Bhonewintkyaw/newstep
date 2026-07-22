@@ -17,6 +17,7 @@ interface MapViewProps {
   zoom?: number;
   className?: string;
   onMarkerClick: (id: string) => void;
+  onLocationChange?: (location: { lat: number; lng: number; accuracy: number }) => void;
 }
 
 // Fix Leaflet default icon issue
@@ -33,6 +34,7 @@ export const MapView: React.FC<MapViewProps> = ({
   zoom = 13,
   className = '',
   onMarkerClick,
+  onLocationChange,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -142,6 +144,7 @@ export const MapView: React.FC<MapViewProps> = ({
           accuracyCircleRef.current?.setLatLng(latLng).setRadius(coords.accuracy);
         }
         map.setView(latLng, Math.max(map.getZoom(), 15));
+        onLocationChange?.({ lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy });
       },
       (error) => {
         setLocationError(error.code === error.PERMISSION_DENIED

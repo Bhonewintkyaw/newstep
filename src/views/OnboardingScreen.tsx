@@ -1,383 +1,172 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { type ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { ArrowRight, CheckCircle2, Store } from 'lucide-react';
 import bowingFarmerImg from '../assets/images/bowing_farmer_1784709620860.jpg';
+import { firebaseAuth, isFirebaseConfigured } from '../lib/firebase';
 
 interface OnboardingScreenProps {
   onComplete: (username: string, phone: string) => void;
   language: 'my' | 'en';
 }
 
-const featureListEn = [
-  'Voice-first AI assistant in Myanmar language',
-  'Discover loans & financial services near you',
-  'Track daily sales & profit with simple voice',
-  'Weather alerts & market recommendations',
-];
-const featureListMy = [
-  'မြန်မာလို အသံဖြင့် AI မန်နေဂျာ',
-  'အနီးနားရှိ ချေးငွေဝန်ဆောင်မှုများကို ရှာဖွေပါ',
-  'အသံဖြင့် နေ့စဉ်အရောင်းအဝယ်များကို မှတ်တမ်းတင်ပါ',
-  'မိုးလေဝသ & ဈေးကွက် အကြံပြုချက်များ',
+const FEATURES = [
+  { my: 'အနီးရှိ ငွေရေးကြေးရေးအဖွဲ့အစည်းများကို ရှာဖွေပါ', en: 'Discover financial services near you' },
+  { my: 'နေ့စဉ် အရောင်းအဝယ်နှင့် အမြတ်ငွေကို မှတ်တမ်းတင်ပါ', en: 'Track daily sales and profit' },
+  { my: 'မြန်မာဘာသာ အသံအကူအညီကို အသုံးပြုပါ', en: 'Use a Myanmar-language voice assistant' },
 ];
 
-export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
-  onComplete,
-  language: initialLanguage,
-}) => {
-  const [lang, setLang] = useState<'my' | 'en'>(initialLanguage);
+const firebaseErrorMessage = (code: string, language: 'my' | 'en') => {
+  const messages: Record<string, [string, string]> = {
+    'auth/invalid-phone-number': ['ဖုန်းနံပါတ် မမှန်ပါ။', 'Enter a valid phone number.'],
+    'auth/too-many-requests': ['တောင်းဆိုမှုများလွန်းနေပါသည်။ ခဏစောင့်ပြီး ထပ်ကြိုးစားပါ။', 'Too many attempts. Please wait and try again.'],
+    'auth/quota-exceeded': ['Firebase SMS ပို့နိုင်သည့်ပမာဏ ပြည့်သွားပါပြီ။', 'The Firebase SMS quota has been exceeded.'],
+    'auth/invalid-verification-code': ['OTP ကုဒ် မမှန်ပါ။', 'The OTP code is incorrect.'],
+    'auth/code-expired': ['OTP ကုဒ် သက်တမ်းကုန်သွားပါပြီ။ အသစ်ပြန်တောင်းပါ။', 'The OTP code has expired. Request a new one.'],
+    'auth/captcha-check-failed': ['reCAPTCHA အတည်ပြုမှု မအောင်မြင်ပါ။', 'reCAPTCHA verification failed. Please try again.'],
+  };
+  const message = messages[code] ?? ['အတည်ပြုမှု မအောင်မြင်ပါ။ ထပ်မံကြိုးစားပါ။', 'Authentication failed. Please try again.'];
+  return language === 'my' ? message[0] : message[1];
+};
+
+const normalizeMyanmarPhone = (value: string) => {
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('95')) return `+${digits}`;
+  digits = digits.replace(/^0+/, '');
+  return `+95${digits}`;
+};
+
+export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, language: initialLanguage }) => {
+  const [language, setLanguage] = useState<'my' | 'en'>(initialLanguage);
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [username, setUsername] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [timer, setTimer] = useState(30);
-  const [canResend, setCanResend] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastText, setToastText] = useState('');
+  const [otp, setOtp] = useState('');
+  const [isBusy, setIsBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [secondsRemaining, setSecondsRemaining] = useState(60);
+  const confirmationRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+  const verifiedPhoneRef = useRef('');
+  const t = (my: string, en: string) => language === 'my' ? my : en;
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (step === 'otp' && timer > 0) {
-      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
-    } else if (timer === 0) {
-      setCanResend(true);
+    if (step !== 'otp' || secondsRemaining <= 0) return;
+    const timer = window.setInterval(() => setSecondsRemaining((seconds) => seconds - 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [step, secondsRemaining]);
+
+  useEffect(() => () => recaptchaRef.current?.clear(), []);
+
+  const getRecaptchaVerifier = () => {
+    if (!firebaseAuth) return null;
+    if (!recaptchaRef.current) {
+      recaptchaRef.current = new RecaptchaVerifier(firebaseAuth, 'firebase-recaptcha', {
+        size: 'invisible',
+        callback: () => setError(''),
+      });
     }
-    return () => { if (interval) clearInterval(interval); };
-  }, [step, timer]);
+    return recaptchaRef.current;
+  };
 
-  const t = (my: string, en: string) => (lang === 'my' ? my : en);
-
-  const handleSendOtp = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const sendOtp = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    setError('');
     if (!username.trim() || !phoneNumber.trim()) return;
-    const newCode = Math.floor(1000 + Math.random() * 9000).toString();
-    setVerificationCode(newCode);
-    setOtpDigits(['', '', '', '']);
-
-    setIsSendingOtp(true);
-    setTimeout(() => {
-      setIsSendingOtp(false);
-      setStep('otp');
-      setTimer(30);
-      setCanResend(false);
-
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const msg = t(
-          `မင်္ဂလာပါခင်ဗျာ။ သင့် OTP ကုဒ်မှာ ${newCode.split('').join(' ')} ဖြစ်ပါသည်။`,
-          `Mingalaba! Your OTP code is ${newCode.split('').join(' ')}.`
-        );
-        const utterance = new SpeechSynthesisUtterance(msg);
-        utterance.rate = 0.95;
-        window.speechSynthesis.speak(utterance);
-      }
-    }, 800);
-  };
-
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newDigits = [...otpDigits];
-    newDigits[index] = value.slice(-1);
-    setOtpDigits(newDigits);
-    if (value && index < 3) {
-      const next = document.getElementById(`otp-input-${index + 1}`);
-      if (next) next.focus();
-    }
-  };
-
-  const handleListenOtp = () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const msg = t(
-        `သင့် OTP ကုဒ်မှာ ${verificationCode.split('').join(' ')} ဖြစ်ပါသည်။`,
-        `Your OTP verification code is ${verificationCode.split('').join(' ')}.`
-      );
-      const utterance = new SpeechSynthesisUtterance(msg);
-      utterance.rate = 0.85;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
-  const handleVerifyOtp = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (otpDigits.join('') !== verificationCode) {
-      setToastText(t('OTP ကုဒ် မမှန်ပါ', 'Incorrect OTP code'));
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 1800);
+    if (!isFirebaseConfigured || !firebaseAuth) {
+      setError(t('Firebase အချက်အလက် မသတ်မှတ်ရသေးပါ။ .env ဖိုင်တွင် VITE_FIREBASE_* တန်ဖိုးများ ထည့်ပါ။', 'Firebase is not configured. Add the VITE_FIREBASE_* values to your .env file.'));
       return;
     }
-    setIsVerifying(true);
-    setTimeout(() => {
-      setIsVerifying(false);
-      setToastText(t(
-        'မင်္ဂလာပါ! အောင်မြင်စွာ ဝင်ရောက်ပြီးပါပြီ',
-        'Welcome! Login verified successfully'
-      ));
-      setShowToast(true);
-      setTimeout(() => {
-        setShowToast(false);
-        onComplete(username.trim(), `+95 ${phoneNumber.trim()}`);
-      }, 1200);
-    }, 1000);
+
+    const normalizedPhone = normalizeMyanmarPhone(phoneNumber);
+    if (!/^\+\d{8,15}$/.test(normalizedPhone)) {
+      setError(t('မှန်ကန်သော ဖုန်းနံပါတ် ထည့်ပါ။', 'Enter a valid phone number.'));
+      return;
+    }
+
+    setIsBusy(true);
+    try {
+      const verifier = getRecaptchaVerifier();
+      if (!verifier) throw new Error('auth/not-configured');
+      confirmationRef.current = await signInWithPhoneNumber(firebaseAuth, normalizedPhone, verifier);
+      verifiedPhoneRef.current = normalizedPhone;
+      setOtp('');
+      setSecondsRemaining(60);
+      setStep('otp');
+    } catch (authError) {
+      const code = (authError as { code?: string }).code ?? 'auth/unknown';
+      setError(firebaseErrorMessage(code, language));
+      recaptchaRef.current?.clear();
+      recaptchaRef.current = null;
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const verifyOtp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!confirmationRef.current || otp.length !== 6) return;
+    setError('');
+    setIsBusy(true);
+    try {
+      await confirmationRef.current.confirm(otp);
+      onComplete(username.trim(), verifiedPhoneRef.current);
+    } catch (authError) {
+      const code = (authError as { code?: string }).code ?? 'auth/unknown';
+      setError(firebaseErrorMessage(code, language));
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-[#f8f9fa] text-[#00201e]">
-      {/* ===== LEFT PANEL: Branding & Illustration ===== */}
-      <div className="relative flex flex-col justify-center items-center lg:w-[45%] bg-gradient-to-br from-[#00535b] via-[#006d77] to-[#00383f] text-white p-8 lg:p-12 overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-[#ffba27]/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-
-        {/* Language toggle on mobile */}
-        <div className="absolute top-4 right-4 lg:hidden z-10">
-          <button
-            onClick={() => setLang((l) => (l === 'my' ? 'en' : 'my'))}
-            className="px-3 py-1.5 bg-white/20 backdrop-blur-sm text-white rounded-lg text-xs font-bold hover:bg-white/30 transition-colors cursor-pointer"
-          >
-            {lang === 'my' ? '🇬🇧 EN' : '🇲🇲 မြန်မာ'}
-          </button>
-        </div>
-
-        <div className="relative z-10 flex flex-col items-center text-center lg:items-start lg:text-left max-w-md">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
-              <span className="material-symbols-outlined text-3xl">storefront</span>
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight">ခြေလှမ်းသစ်</h1>
-              <p className="text-sm font-semibold text-[#9becf7]">First Step</p>
-            </div>
+    <main className="min-h-dvh bg-[#f8f9fa] text-[#00201e] lg:grid lg:grid-cols-[minmax(20rem,42%)_1fr]">
+      <section className="relative flex min-h-[24rem] flex-col justify-center overflow-hidden bg-gradient-to-br from-[#00383f] via-[#00535b] to-[#006d77] px-6 py-12 text-white sm:px-10 lg:min-h-dvh lg:px-14">
+        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#9becf7]/10 blur-2xl" />
+        <button onClick={() => setLanguage((value) => value === 'my' ? 'en' : 'my')} className="absolute right-5 top-5 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold backdrop-blur-sm">
+          {language === 'my' ? 'English' : 'မြန်မာ'}
+        </button>
+        <div className="relative mx-auto w-full max-w-lg">
+          <div className="flex items-center gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15"><Store size={26} aria-hidden="true" /></span>
+            <div><h1 className="text-2xl font-black">ခြေလှမ်းသစ်</h1><p className="text-sm font-bold text-[#9becf7]">First Step</p></div>
           </div>
-
-          {/* Farmer Illustration */}
-          <div className="relative w-48 h-48 lg:w-56 lg:h-56 rounded-full p-1 bg-gradient-to-tr from-[#ffba27] via-white/30 to-[#9becf7] shadow-2xl mb-6 group">
-            <div className="w-full h-full rounded-full overflow-hidden border-4 border-white/80 bg-[#e4fffb]">
-              <img
-                src={bowingFarmerImg}
-                alt="Welcoming Myanmar farmer"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              />
-            </div>
-            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-md text-white px-4 py-1 rounded-full text-xs font-extrabold shadow-md border border-white/30 whitespace-nowrap flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm text-[#ffba27]">volunteer_activism</span>
-              <span>{t('မင်္ဂလာပါ ခင်ဗျာ', 'Mingalaba!')}</span>
-            </div>
+          <div className="mt-8 flex items-center gap-5">
+            <img src={bowingFarmerImg} alt="First Step" className="h-28 w-28 rounded-3xl border-4 border-white/20 object-cover shadow-xl sm:h-36 sm:w-36" />
+            <div><h2 className="text-2xl font-black sm:text-3xl">{t('သင့်လုပ်ငန်းအတွက် ပထမခြေလှမ်း', 'A better first step for your business')}</h2><p className="mt-2 text-sm font-medium text-[#c4fff8]">{t('ရိုးရှင်း၊ လုံခြုံပြီး လက်တွေ့အသုံးဝင်သော လုပ်ငန်းအကူအညီ', 'Simple, secure and practical business support')}</p></div>
           </div>
-
-          {/* Welcome Text */}
-          <h2 className="text-2xl lg:text-3xl font-black mb-2">
-            {t('ကြိုဆိုပါတယ်', 'Welcome to First Step')}
-          </h2>
-          <p className="text-sm lg:text-base text-[#9becf7] font-semibold mb-8 leading-relaxed">
-            {t(
-              'အသေးစားလုပ်ငန်းရှင်များနှင့် တောင်သူဦးကြီးများအတွက် AI အသံမန်နေဂျာ',
-              'AI Voice Manager for Myanmar micro-entrepreneurs & farmers'
-            )}
-          </p>
-
-          {/* Feature List */}
-          <div className="space-y-3 w-full">
-            {(lang === 'my' ? featureListMy : featureListEn).map((feat, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#ffba27]/20 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[#ffba27] text-sm">check</span>
-                </div>
-                <span className="text-sm font-medium">{feat}</span>
-              </div>
-            ))}
+          <div className="mt-8 grid gap-3">
+            {FEATURES.map((feature) => <div key={feature.en} className="flex items-center gap-3 text-sm font-semibold"><CheckCircle2 className="shrink-0 text-[#ffba27]" size={20} aria-hidden="true" /><span>{t(feature.my, feature.en)}</span></div>)}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ===== RIGHT PANEL: Login Form ===== */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-[#f8f9fa]">
-        <div className="w-full max-w-md">
-          {/* Language toggle on desktop */}
-          <div className="hidden lg:flex justify-end mb-6">
-            <button
-              onClick={() => setLang((l) => (l === 'my' ? 'en' : 'my'))}
-              className="px-3 py-1.5 bg-white border border-[#00535b]/20 text-[#00535b] rounded-lg text-xs font-bold shadow-xs hover:bg-[#b7fbf3] transition-colors cursor-pointer"
-            >
-              {lang === 'my' ? '🇬🇧 English' : '🇲🇲 မြန်မာ'}
-            </button>
+      <section className="flex items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
+        <div className="w-full max-w-md rounded-[2rem] border border-[#bec8ca]/30 bg-white p-6 shadow-xl sm:p-8">
+          <div className="mb-6">
+            <p className="text-xs font-extrabold uppercase tracking-[.16em] text-[#006d77]">{step === 'phone' ? t('လုံခြုံစွာ ဝင်ရောက်ရန်', 'Secure sign in') : t('ဖုန်းနံပါတ် အတည်ပြုရန်', 'Verify phone')}</p>
+            <h2 className="mt-2 text-2xl font-black text-[#00201e]">{step === 'phone' ? t('အကောင့်ဝင်ရန်', 'Welcome back') : t('OTP ကုဒ်ထည့်ပါ', 'Enter your OTP')}</h2>
+            <p className="mt-1 text-sm text-[#3e494a]">{step === 'phone' ? t('Firebase မှ SMS ကုဒ်တစ်ခု ပို့ပေးပါမည်။', 'Firebase will send a real verification code by SMS.') : t(`${verifiedPhoneRef.current} သို့ ပို့ထားသော ကုဒ် ၆ လုံးကို ထည့်ပါ။`, `Enter the 6-digit code sent to ${verifiedPhoneRef.current}.`)}</p>
           </div>
 
-          {/* Form Card */}
-          <div className="bg-white rounded-3xl p-8 shadow-xl border border-[#bec8ca]/20">
-            {/* Title */}
-            <div className="text-center mb-6">
-              <h3 className="text-2xl font-extrabold text-[#00535b]">
-                {step === 'phone'
-                  ? t('အကောင့်ဝင်ရန်', 'Sign In')
-                  : t('OTP အတည်ပြုရန်', 'Verify OTP')}
-              </h3>
-              <p className="text-sm text-[#3e494a] font-medium mt-1">
-                {step === 'phone'
-                  ? t('သင့်ဖုန်းနံပါတ်ဖြည့်ပါ', 'Enter your phone number to continue')
-                  : t('သင့်ဖုန်းသို့ပို့ထားသော ကုဒ်ကိုရိုက်ထည့်ပါ', 'Enter the code sent to your phone')}
-              </p>
-            </div>
+          {step === 'phone' ? (
+            <form onSubmit={sendOtp} className="space-y-4">
+              <label className="block"><span className="mb-2 block text-xs font-bold text-[#3e494a]">{t('အသုံးပြုသူအမည်', 'Username')}</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="name" required placeholder={t('သင့်အမည်', 'Your name')} className="h-13 w-full rounded-2xl border-2 border-[#bec8ca] px-4 font-bold outline-none focus:border-[#006d77]" /></label>
+              <label className="block"><span className="mb-2 block text-xs font-bold text-[#3e494a]">{t('ဖုန်းနံပါတ်', 'Phone number')}</span><div className="flex h-13 overflow-hidden rounded-2xl border-2 border-[#bec8ca] focus-within:border-[#006d77]"><span className="flex items-center bg-[#f0f5f4] px-4 text-sm font-extrabold">+95</span><input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" required placeholder="09xxxxxxxxx" className="min-w-0 flex-1 px-4 font-bold outline-none" /></div></label>
+              <button disabled={isBusy || !username.trim() || !phoneNumber.trim()} className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#00535b] font-extrabold text-white shadow-lg transition hover:bg-[#006d77] disabled:cursor-not-allowed disabled:opacity-50">{isBusy ? t('SMS ပို့နေသည်…', 'Sending SMS…') : t('OTP ကုဒ်တောင်းမည်', 'Send OTP')}<ArrowRight size={20} aria-hidden="true" /></button>
+            </form>
+          ) : (
+            <form onSubmit={verifyOtp} className="space-y-5">
+              <label className="block"><span className="mb-2 block text-xs font-bold text-[#3e494a]">{t('OTP ကုဒ် ၆ လုံး', '6-digit OTP')}</span><input value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" required placeholder="••••••" className="h-16 w-full rounded-2xl border-2 border-[#006d77] px-4 text-center text-3xl font-black tracking-[.45em] outline-none" /></label>
+              <button disabled={isBusy || otp.length !== 6} className="h-13 w-full rounded-2xl bg-[#00535b] font-extrabold text-white shadow-lg disabled:opacity-50">{isBusy ? t('အတည်ပြုနေသည်…', 'Verifying…') : t('အတည်ပြုပြီး ဝင်မည်', 'Verify and continue')}</button>
+              <div className="flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setStep('phone'); setOtp(''); setError(''); }} className="text-[#3e494a] hover:text-[#00535b]">{t('ဖုန်းနံပါတ် ပြင်မည်', 'Change number')}</button>{secondsRemaining > 0 ? <span className="text-[#6f797a]">{secondsRemaining}s</span> : <button type="button" onClick={() => void sendOtp()} disabled={isBusy} className="text-[#00535b]">{t('OTP ပြန်ပို့မည်', 'Resend OTP')}</button>}</div>
+            </form>
+          )}
 
-            {/* Speech Bubble / Assistant Message */}
-            <div className="flex items-start gap-3 bg-[#e4fffb] p-4 rounded-2xl border border-[#00535b]/10 mb-6">
-              <span className="material-symbols-outlined text-[#00535b] text-xl fill shrink-0 mt-0.5">record_voice_over</span>
-              <div>
-                <p className="text-[10px] font-bold text-[#00535b] uppercase tracking-wider mb-0.5">
-                  {t('AI မန်နေဂျာ', 'AI Assistant')}
-                </p>
-                <p className="text-xs sm:text-sm font-semibold text-[#00201e] leading-snug">
-                  {step === 'phone'
-                    ? t('မင်္ဂလာပါ! သင့်လုပ်ငန်းစတင်ရန် ဖုန်းနံပါတ်ဖြည့်ပါခင်ဗျာ။', 'Mingalaba! Please enter your phone to get started.')
-                    : t(`+95 ${phoneNumber} သို့ OTP ကုဒ် ၄ လုံးပို့ထားပါသည်။`, `A 4-digit OTP has been sent to +95 ${phoneNumber}.`)}
-                </p>
-              </div>
-            </div>
-
-            {/* STEP 1: Phone Number */}
-            {step === 'phone' && (
-              <form onSubmit={handleSendOtp} className="space-y-5 animate-in fade-in duration-200">
-                <div className="space-y-2">
-                  <label htmlFor="username" className="text-xs font-bold text-[#3e494a] block ml-1 uppercase tracking-wider">
-                    {t('အသုံးပြုသူအမည်', 'Username')}
-                  </label>
-                  <input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoComplete="name"
-                    className="w-full h-14 px-4 bg-white border-2 border-[#bec8ca] focus:border-[#00535b] rounded-2xl font-bold text-base outline-none transition-all shadow-xs"
-                    placeholder={t('သင့်အမည်ကို ရိုက်ထည့်ပါ', 'Enter your name')}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[#3e494a] block ml-1 uppercase tracking-wider">
-                    {t('ဖုန်းနံပါတ်', 'Phone Number')}
-                  </label>
-                  <div className="relative flex items-center">
-                    <div className="absolute left-4 flex items-center gap-2 pointer-events-none z-10">
-                      <div className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-lg">
-                        <span className="text-sm font-extrabold text-[#00201e]">+95</span>
-                      </div>
-                    </div>
-                    <input
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="w-full h-14 pl-20 pr-4 bg-white border-2 border-[#bec8ca] focus:border-[#00535b] rounded-2xl font-bold text-lg outline-none transition-all placeholder:text-[#6f797a] shadow-xs"
-                      placeholder="9 xxxxxxxx"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSendingOtp || !username.trim() || !phoneNumber.trim()}
-                  className="w-full h-14 bg-[#00535b] hover:bg-[#006d77] disabled:opacity-50 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  {isSendingOtp ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>{t('OTP ပို့နေသည်...', 'Sending OTP...')}</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <span>{t('OTP ကုဒ်တောင်းမည်', 'Request OTP Code')}</span>
-                      <span className="material-symbols-outlined text-xl">send</span>
-                    </span>
-                  )}
-                </button>
-              </form>
-            )}
-
-            {/* STEP 2: OTP */}
-            {step === 'otp' && (
-              <form onSubmit={handleVerifyOtp} className="space-y-6 animate-in fade-in duration-200">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-bold text-[#3e494a] uppercase tracking-wider">
-                      {t('OTP ကုဒ်', 'One-Time Password')}
-                    </label>
-                    <button type="button" onClick={handleListenOtp}
-                      className="text-xs font-bold text-[#00535b] bg-[#e4fffb] hover:bg-[#b1f5ed] px-2.5 py-1 rounded-full border border-[#00535b]/20 flex items-center gap-1 cursor-pointer">
-                      <span className="material-symbols-outlined text-sm">volume_up</span>
-                      <span>{t('နားထောင်မည်', 'Listen')}</span>
-                    </button>
-                  </div>
-
-                  <div className="flex justify-center gap-3">
-                    {otpDigits.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        id={`otp-input-${idx}`}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleOtpChange(idx, e.target.value)}
-                        className="w-14 h-14 sm:w-16 sm:h-16 text-center text-2xl font-black bg-white border-2 border-[#00535b] rounded-2xl focus:bg-[#e4fffb] focus:outline-none shadow-sm transition-all"
-                      />
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <div className="text-xs font-bold text-[#3e494a]">
-                      {canResend ? (
-                        <button type="button" onClick={() => handleSendOtp()}
-                          className="text-[#8c4e35] font-extrabold hover:underline cursor-pointer">
-                          {t('ပြန်ပို့မည်', 'Resend')}
-                        </button>
-                      ) : (
-                        <span>{t(`ပြန်ပို့ရန် ${timer}စက္ကန့်`, `Resend in ${timer}s`)}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isVerifying || otpDigits.some((d) => !d)}
-                  className="w-full h-14 bg-[#00535b] hover:bg-[#006d77] disabled:opacity-50 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2 shadow-lg active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  {isVerifying ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>{t('အတည်ပြုနေသည်...', 'Verifying...')}</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <span>{t('အတည်ပြုပြီးဝင်မည်', 'Verify & Sign In')}</span>
-                      <span className="material-symbols-outlined text-xl">check_circle</span>
-                    </span>
-                  )}
-                </button>
-
-                <button type="button" onClick={() => setStep('phone')}
-                  className="w-full py-2 text-xs font-bold text-[#3e494a] hover:text-[#00535b] transition-colors text-center block cursor-pointer">
-                  {t('← ဖုန်းနံပါတ်ပြန်ပြင်မည်', '← Change Phone Number')}
-                </button>
-              </form>
-            )}
-
-            {/* Footer */}
-            <p className="text-center text-[10px] text-[#6f797a] font-medium mt-6 pt-4 border-t border-gray-100">
-              {t('အသံဖြင့်သာ အလွယ်တကူသုံးနိုင်ရန် ဒီဇိုင်းထားသည်', 'Designed for simple voice-first interaction')}
-            </p>
-          </div>
+          {error && <div role="alert" className="mt-4 rounded-2xl bg-[#ffdad6] px-4 py-3 text-sm font-bold text-[#93000a]">{error}</div>}
+          <div id="firebase-recaptcha" />
+          <p className="mt-6 border-t border-gray-100 pt-4 text-center text-[11px] font-medium text-[#6f797a]">{t('SMS နှင့် ဒေတာနှုန်းထားများ ကောက်ခံနိုင်ပါသည်။', 'Standard SMS and data rates may apply.')}</p>
         </div>
-      </div>
-
-      {/* Toast */}
-      {showToast && (
-        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-[#00201e] text-[#e4fffb] px-6 py-3.5 rounded-full shadow-2xl z-50 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-5 duration-200">
-          <span className="material-symbols-outlined text-[#e4fffb]">check_circle</span>
-          <span className="text-xs font-bold">{toastText}</span>
-        </div>
-      )}
-    </div>
+      </section>
+    </main>
   );
 };
