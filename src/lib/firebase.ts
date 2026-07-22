@@ -22,3 +22,4 @@ const app = isFirebaseConfigured
   : null;
 
 export const firebaseAuth = app ? getAuth(app) : null;
+firebaseAuth?.useDeviceLanguage();

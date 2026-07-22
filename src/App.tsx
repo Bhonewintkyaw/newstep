@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { VoiceAssistantModal } from './components/VoiceAssistantModal';
@@ -10,6 +11,7 @@ import { InventoryScreen } from './views/InventoryScreen';
 import { LoansScreen } from './views/LoansScreen';
 import { PredictionScreen } from './views/PredictionScreen';
 import { ProfileScreen } from './views/ProfileScreen';
+import { firebaseAuth } from './lib/firebase';
 
 import {
   emptyUserProfile,
@@ -47,6 +49,22 @@ export default function App() {
 
   useEffect(() => () => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!firebaseAuth) return;
+    return onAuthStateChanged(firebaseAuth, (firebaseUser) => {
+      if (!firebaseUser) {
+        setCurrentTab('onboarding');
+        return;
+      }
+      setUserProfile((profile) => ({
+        ...profile,
+        name: firebaseUser.displayName || profile.name || 'User',
+        phone: firebaseUser.phoneNumber || profile.phone,
+      }));
+      setCurrentTab('home');
+    });
   }, []);
 
   const handleApplyVoiceResult = (result: VoiceProcessResult) => {
@@ -106,6 +124,7 @@ export default function App() {
   };
 
   const handleResetData = () => {
+    if (firebaseAuth) void signOut(firebaseAuth);
     setTransactions([]);
     setLowStockAlerts([]);
     setInventory([]);
@@ -113,6 +132,11 @@ export default function App() {
     setUserProfile(emptyUserProfile);
     setCurrentTab('onboarding');
     triggerToast(language === 'my' ? 'အကောင့်ဒေတာအားလုံး ရှင်းလင်းပြီးပါပြီ' : 'Account data cleared');
+  };
+
+  const handleLogout = async () => {
+    if (firebaseAuth) await signOut(firebaseAuth);
+    setCurrentTab('onboarding');
   };
 
   const toggleLanguage = () => setLanguage((l) => (l === 'my' ? 'en' : 'my'));
@@ -194,7 +218,7 @@ export default function App() {
             language={language}
             onToggleLanguage={toggleLanguage}
             onResetData={handleResetData}
-            onGoToLogin={() => setCurrentTab('onboarding')}
+            onGoToLogin={() => void handleLogout()}
             onUpdateUserProfile={handleUpdateUserProfile}
           />
         )}

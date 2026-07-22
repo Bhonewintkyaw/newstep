@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { type ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { type ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber, updateProfile } from 'firebase/auth';
 import { ArrowRight, CheckCircle2, Store } from 'lucide-react';
 import bowingFarmerImg from '../assets/images/bowing_farmer_1784709620860.jpg';
 import { firebaseAuth, isFirebaseConfigured } from '../lib/firebase';
@@ -23,6 +23,12 @@ const firebaseErrorMessage = (code: string, language: 'my' | 'en') => {
     'auth/invalid-verification-code': ['OTP ကုဒ် မမှန်ပါ။', 'The OTP code is incorrect.'],
     'auth/code-expired': ['OTP ကုဒ် သက်တမ်းကုန်သွားပါပြီ။ အသစ်ပြန်တောင်းပါ။', 'The OTP code has expired. Request a new one.'],
     'auth/captcha-check-failed': ['reCAPTCHA အတည်ပြုမှု မအောင်မြင်ပါ။', 'reCAPTCHA verification failed. Please try again.'],
+    'auth/unauthorized-domain': ['ဤဝဘ်ဆိုက်ဒိုမိန်းကို Firebase Authorized domains တွင် ထည့်ရန်လိုပါသည်။', 'Add this site domain to Firebase Authentication → Authorized domains.'],
+    'auth/operation-not-allowed': ['Firebase Console တွင် Phone sign-in ကို ဖွင့်ရန်လိုပါသည်။', 'Enable the Phone provider in Firebase Authentication → Sign-in method.'],
+    'auth/billing-not-enabled': ['ဤ Firebase project တွင် SMS အတွက် billing ဖွင့်ရန်လိုပါသည်။', 'Billing must be enabled for SMS authentication on this Firebase project.'],
+    'auth/invalid-app-credential': ['Firebase reCAPTCHA အတည်ပြုချက် မမှန်ပါ။ စာမျက်နှာကို refresh လုပ်ပြီး ထပ်ကြိုးစားပါ။', 'Firebase rejected the reCAPTCHA credential. Refresh the page and try again.'],
+    'auth/network-request-failed': ['ကွန်ရက်ချိတ်ဆက်မှု မအောင်မြင်ပါ။', 'The Firebase network request failed. Check your connection.'],
+    'auth/missing-phone-number': ['ဖုန်းနံပါတ် ထည့်ရန်လိုပါသည်။', 'Enter a phone number.'],
   };
   const message = messages[code] ?? ['အတည်ပြုမှု မအောင်မြင်ပါ။ ထပ်မံကြိုးစားပါ။', 'Authentication failed. Please try again.'];
   return language === 'my' ? message[0] : message[1];
@@ -57,18 +63,23 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, 
 
   useEffect(() => () => recaptchaRef.current?.clear(), []);
 
-  const getRecaptchaVerifier = () => {
+  const getRecaptchaVerifier = (buttonId: string) => {
     if (!firebaseAuth) return null;
     if (!recaptchaRef.current) {
-      recaptchaRef.current = new RecaptchaVerifier(firebaseAuth, 'firebase-recaptcha', {
+      recaptchaRef.current = new RecaptchaVerifier(firebaseAuth, buttonId, {
         size: 'invisible',
         callback: () => setError(''),
+        'expired-callback': () => {
+          recaptchaRef.current?.clear();
+          recaptchaRef.current = null;
+          setError(t('reCAPTCHA သက်တမ်းကုန်သွားပါပြီ။ ထပ်မံကြိုးစားပါ။', 'reCAPTCHA expired. Please try again.'));
+        },
       });
     }
     return recaptchaRef.current;
   };
 
-  const sendOtp = async (event?: React.FormEvent) => {
+  const sendOtp = async (event?: React.FormEvent, buttonId = 'firebase-sign-in-button') => {
     event?.preventDefault();
     setError('');
     if (!username.trim() || !phoneNumber.trim()) return;
@@ -85,9 +96,12 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, 
 
     setIsBusy(true);
     try {
-      const verifier = getRecaptchaVerifier();
+      const verifier = getRecaptchaVerifier(buttonId);
       if (!verifier) throw new Error('auth/not-configured');
+      await verifier.render();
       confirmationRef.current = await signInWithPhoneNumber(firebaseAuth, normalizedPhone, verifier);
+      verifier.clear();
+      recaptchaRef.current = null;
       verifiedPhoneRef.current = normalizedPhone;
       setOtp('');
       setSecondsRemaining(60);
@@ -108,7 +122,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, 
     setError('');
     setIsBusy(true);
     try {
-      await confirmationRef.current.confirm(otp);
+      const credential = await confirmationRef.current.confirm(otp);
+      if (credential.user.displayName !== username.trim()) {
+        await updateProfile(credential.user, { displayName: username.trim() });
+      }
       onComplete(username.trim(), verifiedPhoneRef.current);
     } catch (authError) {
       const code = (authError as { code?: string }).code ?? 'auth/unknown';
@@ -152,18 +169,17 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, 
             <form onSubmit={sendOtp} className="space-y-4">
               <label className="block"><span className="mb-2 block text-xs font-bold text-[#3e494a]">{t('အသုံးပြုသူအမည်', 'Username')}</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="name" required placeholder={t('သင့်အမည်', 'Your name')} className="h-13 w-full rounded-2xl border-2 border-[#bec8ca] px-4 font-bold outline-none focus:border-[#006d77]" /></label>
               <label className="block"><span className="mb-2 block text-xs font-bold text-[#3e494a]">{t('ဖုန်းနံပါတ်', 'Phone number')}</span><div className="flex h-13 overflow-hidden rounded-2xl border-2 border-[#bec8ca] focus-within:border-[#006d77]"><span className="flex items-center bg-[#f0f5f4] px-4 text-sm font-extrabold">+95</span><input value={phoneNumber} onChange={(event) => setPhoneNumber(event.target.value)} inputMode="tel" autoComplete="tel" required placeholder="09xxxxxxxxx" className="min-w-0 flex-1 px-4 font-bold outline-none" /></div></label>
-              <button disabled={isBusy || !username.trim() || !phoneNumber.trim()} className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#00535b] font-extrabold text-white shadow-lg transition hover:bg-[#006d77] disabled:cursor-not-allowed disabled:opacity-50">{isBusy ? t('SMS ပို့နေသည်…', 'Sending SMS…') : t('OTP ကုဒ်တောင်းမည်', 'Send OTP')}<ArrowRight size={20} aria-hidden="true" /></button>
+              <button id="firebase-sign-in-button" disabled={isBusy || !username.trim() || !phoneNumber.trim()} className="flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-[#00535b] font-extrabold text-white shadow-lg transition hover:bg-[#006d77] disabled:cursor-not-allowed disabled:opacity-50">{isBusy ? t('SMS ပို့နေသည်…', 'Sending SMS…') : t('OTP ကုဒ်တောင်းမည်', 'Send OTP')}<ArrowRight size={20} aria-hidden="true" /></button>
             </form>
           ) : (
             <form onSubmit={verifyOtp} className="space-y-5">
               <label className="block"><span className="mb-2 block text-xs font-bold text-[#3e494a]">{t('OTP ကုဒ် ၆ လုံး', '6-digit OTP')}</span><input value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" required placeholder="••••••" className="h-16 w-full rounded-2xl border-2 border-[#006d77] px-4 text-center text-3xl font-black tracking-[.45em] outline-none" /></label>
               <button disabled={isBusy || otp.length !== 6} className="h-13 w-full rounded-2xl bg-[#00535b] font-extrabold text-white shadow-lg disabled:opacity-50">{isBusy ? t('အတည်ပြုနေသည်…', 'Verifying…') : t('အတည်ပြုပြီး ဝင်မည်', 'Verify and continue')}</button>
-              <div className="flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setStep('phone'); setOtp(''); setError(''); }} className="text-[#3e494a] hover:text-[#00535b]">{t('ဖုန်းနံပါတ် ပြင်မည်', 'Change number')}</button>{secondsRemaining > 0 ? <span className="text-[#6f797a]">{secondsRemaining}s</span> : <button type="button" onClick={() => void sendOtp()} disabled={isBusy} className="text-[#00535b]">{t('OTP ပြန်ပို့မည်', 'Resend OTP')}</button>}</div>
+              <div className="flex items-center justify-between text-xs font-bold"><button type="button" onClick={() => { setStep('phone'); setOtp(''); setError(''); }} className="text-[#3e494a] hover:text-[#00535b]">{t('ဖုန်းနံပါတ် ပြင်မည်', 'Change number')}</button>{secondsRemaining > 0 ? <span className="text-[#6f797a]">{secondsRemaining}s</span> : <button id="firebase-resend-button" type="button" onClick={() => void sendOtp(undefined, 'firebase-resend-button')} disabled={isBusy} className="text-[#00535b]">{t('OTP ပြန်ပို့မည်', 'Resend OTP')}</button>}</div>
             </form>
           )}
 
           {error && <div role="alert" className="mt-4 rounded-2xl bg-[#ffdad6] px-4 py-3 text-sm font-bold text-[#93000a]">{error}</div>}
-          <div id="firebase-recaptcha" />
           <p className="mt-6 border-t border-gray-100 pt-4 text-center text-[11px] font-medium text-[#6f797a]">{t('SMS နှင့် ဒေတာနှုန်းထားများ ကောက်ခံနိုင်ပါသည်။', 'Standard SMS and data rates may apply.')}</p>
         </div>
       </section>
