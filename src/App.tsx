@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { VoiceAssistantModal } from './components/VoiceAssistantModal';
@@ -45,11 +45,17 @@ export default function App() {
   const [lowStockAlerts, setLowStockAlerts] = useState(initialLowStockAlerts);
   const [transactions, setTransactions] = useState(initialTransactions);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const triggerToast = (msg: string) => {
+  const triggerToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3000);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
 
   const handleApplyVoiceResult = (result: VoiceProcessResult) => {
     if (result.action === 'RECORD_SALE' || result.action === 'RECORD_PURCHASE') {
@@ -120,7 +126,7 @@ export default function App() {
   const toggleLanguage = () => setLanguage((l) => (l === 'my' ? 'en' : 'my'));
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] text-[#00201e] font-sans antialiased selection:bg-[#006d77] selection:text-[#9becf7]">
+    <div className="min-h-dvh bg-[#f8f9fa] text-[#00201e] font-sans antialiased selection:bg-[#006d77] selection:text-[#9becf7]">
       {currentTab !== 'onboarding' && (
         <Header
           currentTab={currentTab}
@@ -132,7 +138,7 @@ export default function App() {
         />
       )}
 
-      <main className={`w-full transition-[padding-left] duration-200 min-h-screen ${currentTab !== 'onboarding' ? 'lg:pl-64' : ''}`}>
+      <main className={`w-full min-h-dvh transition-[padding-left] duration-200 ${currentTab !== 'onboarding' ? 'lg:pl-64' : ''}`}>
         {currentTab === 'home' && (
           <HomeScreen
             userProfile={userProfile}

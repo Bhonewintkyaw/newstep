@@ -17,7 +17,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showWeatherDetails, setShowWeatherDetails] = useState(false);
 
   return (
-    <div className="pt-20 lg:pt-24 pb-32 px-4 sm:px-6 lg:px-8 max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto space-y-6 lg:space-y-8">
+    <div className="screen-shell space-y-6 lg:space-y-8">
       {/* Top Hero Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         {/* User Profile Summary Card */}

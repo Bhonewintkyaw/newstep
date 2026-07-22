@@ -39,14 +39,19 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   return (
     <>
       {/* Mobile & Tablet Bottom Navigation Bar (hidden on Desktop lg+) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 w-full z-40 flex justify-around items-center px-4 py-2.5 bg-[#b7fbf3]/95 backdrop-blur-md rounded-t-2xl shadow-lg border-t border-[#00535b]/10 max-w-lg mx-auto">
+      <nav
+        aria-label="Primary navigation"
+        className="lg:hidden fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 items-stretch gap-1 px-2 pt-2 pb-[calc(.5rem+env(safe-area-inset-bottom))] bg-[#b7fbf3]/95 backdrop-blur-md shadow-[0_-8px_30px_rgba(0,83,91,.12)] border-t border-[#00535b]/10"
+      >
         {items.map((item) => {
           const isActive = currentTab === item.id;
           return (
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center justify-center px-3.5 py-1.5 transition-all duration-200 rounded-xl cursor-pointer ${
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={item.labelEnglish}
+              className={`min-w-0 min-h-14 flex flex-col items-center justify-center px-1 py-1.5 transition-all duration-200 rounded-xl cursor-pointer ${
                 isActive
                   ? 'bg-[#006d77] text-[#9becf7] shadow-sm scale-95'
                   : 'text-[#3e494a] hover:bg-[#acefe7]/50'
@@ -59,18 +64,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               >
                 {item.icon}
               </span>
-              <span className="text-[11px] font-semibold mt-0.5 tracking-wide">
-                {language === 'my'
-                  ? item.id === 'home'
-                    ? 'Home'
-                    : item.id === 'loans'
-                    ? 'Finance'
-                    : item.id === 'prediction'
-                    ? 'Prediction'
-                    : item.id === 'inventory'
-                    ? 'Inventory'
-                    : 'Profile'
-                  : item.labelEnglish}
+              <span className="w-full truncate text-center text-[10px] min-[380px]:text-[11px] font-semibold mt-0.5 tracking-tight">
+                {item.labelEnglish}
               </span>
             </button>
           );
@@ -78,7 +73,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       </nav>
 
       {/* Desktop Navigation Left Sidebar (visible on Desktop lg+) */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 bg-[#e4fffb] border-r border-[#00535b]/15 shadow-md p-5 justify-between">
+      <aside aria-label="Primary navigation" className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 bg-[#e4fffb] border-r border-[#00535b]/15 shadow-md p-5 justify-between overflow-y-auto">
         <div className="space-y-6">
           {/* Desktop App Branding Logo */}
           <div className="flex items-center gap-3 pb-4 border-b border-[#00535b]/10">
@@ -134,6 +129,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 <button
                   key={item.id}
                   onClick={() => onSelectTab(item.id)}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`w-full flex items-center justify-start gap-3 px-3.5 py-2.5 rounded-2xl font-bold transition-[background-color,color,transform] duration-200 cursor-pointer text-left ${
                     isActive
                       ? 'bg-[#00535b] text-white shadow-md translate-x-1'

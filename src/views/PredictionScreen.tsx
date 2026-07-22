@@ -111,7 +111,7 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
   const t = (my: string, en: string) => (language === 'my' ? my : en);
 
   return (
-    <div className="pt-20 lg:pt-24 pb-32 px-4 sm:px-6 lg:px-8 max-w-2xl md:max-w-3xl lg:max-w-6xl mx-auto space-y-6 lg:space-y-8">
+    <div className="screen-shell space-y-6 lg:space-y-8">
       <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-[#00535b] flex items-center gap-2">

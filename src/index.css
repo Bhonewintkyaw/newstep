@@ -27,6 +27,7 @@
   html {
     overflow-y: scroll;
     scrollbar-gutter: stable;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -34,10 +35,35 @@
     color: #00201e;
     font-family: 'Noto Sans', sans-serif;
     overflow-x: hidden;
+    min-width: 320px;
+  }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 3px solid rgba(0, 109, 119, 0.3);
+    outline-offset: 2px;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Be Vietnam Pro', 'Noto Sans', sans-serif;
+  }
+}
+
+@layer components {
+  .screen-shell {
+    width: min(100%, 72rem);
+    margin-inline: auto;
+    padding: 5rem clamp(1rem, 3vw, 2rem) calc(7.5rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 1024px) {
+    .screen-shell {
+      padding-top: 6rem;
+      padding-bottom: 3rem;
+    }
   }
 }
 
@@ -100,4 +126,13 @@
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

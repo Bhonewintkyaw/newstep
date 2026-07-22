@@ -22,8 +22,8 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="fixed top-0 left-0 w-full lg:left-64 lg:w-[calc(100%-16rem)] z-30 flex items-center justify-between px-5 md:px-8 h-16 bg-[#e4fffb]/95 backdrop-blur-md shadow-xs border-b border-[#00535b]/10 transition-[left,width] duration-200">
-        <div className="flex items-center gap-3">
+      <header className="fixed top-0 left-0 w-full lg:left-64 lg:w-[calc(100%-16rem)] z-30 flex items-center justify-between gap-2 px-3 sm:px-5 md:px-8 h-16 bg-[#e4fffb]/95 backdrop-blur-md shadow-xs border-b border-[#00535b]/10 transition-[left,width] duration-200">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-3">
           <button
             onClick={() => setIsDrawerOpen(true)}
             aria-label="Open menu"
@@ -33,21 +33,22 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           <button
             onClick={() => onSelectTab('home')}
-            className="flex items-center gap-2 text-left active:opacity-80 cursor-pointer"
+            className="flex min-w-0 items-center gap-2 text-left active:opacity-80 cursor-pointer"
           >
-            <h1 className="font-extrabold text-xl text-[#00535b] tracking-tight">
+            <h1 className="truncate font-extrabold text-base sm:text-xl text-[#00535b] tracking-tight">
               ခြေလှမ်းသစ်
             </h1>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#006d77]/10 text-[#00535b]">
+            <span className="hidden min-[430px]:inline text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#006d77]/10 text-[#00535b] shrink-0">
               First Step
             </span>
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
           <button
             onClick={onToggleLanguage}
-            className="px-3 py-1.5 text-xs font-bold rounded-xl border border-[#00535b]/20 bg-white text-[#00535b] hover:bg-[#b7fbf3] transition-colors shadow-xs cursor-pointer"
+            aria-label="Change language"
+            className="px-2 sm:px-3 py-1.5 text-xs font-bold rounded-xl border border-[#00535b]/20 bg-white text-[#00535b] hover:bg-[#b7fbf3] transition-colors shadow-xs cursor-pointer"
           >
             {language === 'my' ? '🇲🇲 မြန်မာ' : '🇬🇧 EN'}
           </button>
@@ -69,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
             onClick={() => setIsDrawerOpen(false)}
           />
-          <div className="relative w-80 max-w-[80vw] bg-white h-full shadow-2xl flex flex-col justify-between p-5 z-10 animate-in slide-in-from-left duration-200">
+          <div role="dialog" aria-modal="true" aria-label="Navigation menu" className="relative w-80 max-w-[88vw] bg-white h-full shadow-2xl flex flex-col justify-between p-5 z-10 animate-in slide-in-from-left duration-200 overflow-y-auto">
             <div>
               <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-5">
                 <div className="flex items-center gap-3">

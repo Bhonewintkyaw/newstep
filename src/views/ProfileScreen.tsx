@@ -89,7 +89,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   return (
-    <div className="pt-20 lg:pt-24 pb-32 px-4 sm:px-6 lg:px-8 max-w-lg md:max-w-3xl lg:max-w-5xl mx-auto space-y-6 lg:space-y-8">
+    <div className="screen-shell max-w-5xl space-y-6 lg:space-y-8">
       {/* Hidden File Input for Photo Upload */}
       <input
         type="file"
@@ -373,4 +373,3 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     </div>
   );
 };
-
