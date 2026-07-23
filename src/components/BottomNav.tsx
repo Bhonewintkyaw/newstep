@@ -1,5 +1,6 @@
 import React from 'react';
 import { TabType, UserProfile } from '../types';
+import newStepLogo from '../assets/images/new-step-logo.png';
 
 interface BottomNavProps {
   currentTab: TabType;
@@ -76,9 +77,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         <div className="space-y-6">
           {/* Desktop App Branding Logo */}
           <div className="flex items-center gap-3 pb-4 border-b border-[#00535b]/10">
-            <div className="w-10 h-10 rounded-xl bg-[#00535b] flex items-center justify-center text-white shadow-md">
-              <span className="material-symbols-outlined text-2xl">storefront</span>
-            </div>
+            <img
+              src={newStepLogo}
+              alt="New Step logo"
+              className="w-10 h-10 shrink-0 rounded-xl object-cover shadow-md"
+            />
             <div>
               <h1 className="font-extrabold text-lg text-[#00535b] tracking-tight leading-none">
                 ခြေလှမ်းသစ်
