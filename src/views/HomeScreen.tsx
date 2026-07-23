@@ -126,7 +126,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Main 3 Functional Modules Grid */}
       <section className="space-y-4">
         <h3 className="text-base font-extrabold text-[#00535b] px-1">
-          {language === 'my' ? 'အဓိက လုပ်ဆောင်ချက် (Main Functions)' : 'Main System Modules'}
+          {language === 'my' ? 'အဓိက လုပ်ဆောင်ချက်များ' : 'Main System Modules'}
         </h3>
         <div className="grid grid-cols-1 items-stretch gap-5 md:grid-cols-3">
           {/* Module 1: Finance */}
@@ -141,13 +141,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </span>
               </div>
               <span className="text-[11px] font-extrabold text-[#8c4e35] bg-[#ffad8f]/20 px-2.5 py-1 rounded-full">
-                💰 Finance
+                {language === 'my' ? '💰 ငွေရေးကြေးရေး' : '💰 Finance'}
               </span>
             </div>
 
             <div className="mt-6 flex-1">
               <h4 className="font-extrabold text-lg text-[#00201e]">
-                {language === 'my' ? '၁။ ငွေရေးကြေးရေး (Finance)' : '1. Finance'}
+                {language === 'my' ? '၁။ ငွေရေးကြေးရေး' : '1. Finance'}
               </h4>
               <p className="text-xs font-semibold text-[#3e494a] mt-1 leading-snug">
                 {language === 'my'
@@ -174,13 +174,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </span>
               </div>
               <span className="text-[11px] font-extrabold text-[#825b00] bg-[#ffba27]/20 px-2.5 py-1 rounded-full">
-                🤖 AI Prediction
+                {language === 'my' ? '🤖 ဉာဏ်ရည်တု ခန့်မှန်းချက်' : '🤖 AI Prediction'}
               </span>
             </div>
 
             <div className="mt-6 flex-1">
               <h4 className="font-extrabold text-lg text-[#00201e]">
-                {language === 'my' ? '၂။ AI ခန့်မှန်းချက် (AI Prediction)' : '2. AI Prediction'}
+                {language === 'my' ? '၂။ ဉာဏ်ရည်တု ခန့်မှန်းချက်' : '2. AI Prediction'}
               </h4>
               <p className="text-xs font-semibold text-[#3e494a] mt-1 leading-snug">
                 {language === 'my'
@@ -207,13 +207,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </span>
               </div>
               <span className="text-[11px] font-extrabold text-[#00535b] bg-[#00535b]/10 px-2.5 py-1 rounded-full">
-                📦 Inventory
+                {language === 'my' ? '📦 ကုန်ပစ္စည်း' : '📦 Inventory'}
               </span>
             </div>
 
             <div className="mt-6 flex-1">
               <h4 className="font-extrabold text-lg text-[#00201e]">
-                {language === 'my' ? '၃။ ကုန်ပစ္စည်းစနစ် (Inventory System)' : '3. Inventory System'}
+                {language === 'my' ? '၃။ ကုန်ပစ္စည်း စီမံခန့်ခွဲမှုစနစ်' : '3. Inventory System'}
               </h4>
               <p className="text-xs font-semibold text-[#3e494a] mt-1 leading-snug">
                 {language === 'my'
