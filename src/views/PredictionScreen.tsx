@@ -99,7 +99,16 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
     setIsPlayingAudio(true);
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(currentWeather.voiceAnnouncementBurmese);
+      const isBurmese = language === 'my';
+      const text = isBurmese
+        ? currentWeather.voiceAnnouncementBurmese
+        : `${currentWeather.city} temperature is ${currentWeather.tempCelsius} degrees Celsius, ${currentWeather.conditionEnglish}, with a ${currentWeather.rainProbabilityPercent}% chance of rain.`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = isBurmese ? 'my-MM' : 'en-US';
+      const preferredVoice = window.speechSynthesis.getVoices().find((voice) => (
+        voice.lang.toLowerCase().startsWith(isBurmese ? 'my' : 'en')
+      ));
+      if (preferredVoice) utterance.voice = preferredVoice;
       utterance.rate = 0.9;
       utterance.onend = () => setIsPlayingAudio(false);
       utterance.onerror = () => setIsPlayingAudio(false);

@@ -68,8 +68,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   }
 
   const handlePlayAnalysisVoice = () => {
-    const text = `မန်နေဂျာ AI ၏ စီးပွားရေး သုံးသပ်ချက် - သင့်ဆိုင်၏ လစဉ် အမြတ်ငွေ ${monthlyProfit.toLocaleString()} ကျပ် ဖြစ်ပြီး၊ လစဉ် ချေးငွေဆပ်ရန် လိုအပ်ချက် ${requiredMonthlyRepayment.toLocaleString()} ကျပ် ထက် ${coverageRatio}% ကျော်လွန် သာလွန်လျက်ရှိပါသည်။ ချေးငွေပြန်ဆပ်ရန် စိတ်ချရသော အခြေအနေ ဖြစ်ပါသည်။`;
-    speakAnalysis(text);
+    const text = language === 'my'
+      ? `မန်နေဂျာ AI ၏ စီးပွားရေး သုံးသပ်ချက်။ သင့်ဆိုင်၏ လစဉ်အမြတ်ငွေ ${monthlyProfit.toLocaleString()} ကျပ် ဖြစ်ပြီး၊ လစဉ်ချေးငွေဆပ်ရန် လိုအပ်ချက် ${requiredMonthlyRepayment.toLocaleString()} ကျပ်ထက် ${coverageRatio} ရာခိုင်နှုန်း ဖြစ်ပါသည်။ ချေးငွေပြန်ဆပ်ရန် ${statusBadgeBurmese} ဖြစ်ပါသည်။`
+      : `AI manager business analysis. Your monthly profit is ${monthlyProfit.toLocaleString()} MMK. Your required monthly loan repayment is ${requiredMonthlyRepayment.toLocaleString()} MMK. Your repayment coverage is ${coverageRatio} percent. The repayment status is ${statusBadgeEnglish}.`;
+    speakAnalysis(text, language);
   };
 
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -257,8 +259,8 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         </div>
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <section className="space-y-3">
+      <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
+        <section className="flex h-full flex-col space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="font-extrabold text-base text-[#00201e]">
               {t('ပစ္စည်းပြတ်လပ်မှု သတိပေးချက်', 'Low Stock Alerts')}
@@ -268,9 +270,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
             </span>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="flex-1 space-y-2.5">
             {lowStockAlerts.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-[#00535b]/20 bg-white p-6 text-center text-sm font-semibold text-[#3e494a]">
+              <div className="flex min-h-36 h-full items-center justify-center rounded-3xl border border-dashed border-[#00535b]/20 bg-white p-6 text-center text-sm font-semibold text-[#3e494a]">
                 {t('ပစ္စည်းပြတ်လပ်မှု မရှိသေးပါ', 'No low-stock alerts yet')}
               </div>
             )}
@@ -298,7 +300,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           </div>
         </section>
 
-        <section className="space-y-3">
+        <section className="flex h-full flex-col space-y-3">
           <div className="flex items-center justify-between px-1">
             <h3 className="font-extrabold text-base text-[#00201e]">
               {t('လတ်တလော စာရင်းများ', 'Recent Transactions')}
@@ -312,9 +314,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
             </button>
           </div>
 
-          <div className="bg-white rounded-3xl shadow-xs border border-[#bec8ca]/30 divide-y divide-[#b1f5ed] overflow-hidden">
+          <div className="flex-1 bg-white rounded-3xl shadow-xs border border-[#bec8ca]/30 divide-y divide-[#b1f5ed] overflow-hidden">
             {transactions.length === 0 && (
-              <div className="p-8 text-center">
+              <div className="flex min-h-36 h-full flex-col items-center justify-center p-8 text-center">
                 <span className="material-symbols-outlined text-4xl text-[#006d77]">receipt_long</span>
                 <p className="mt-2 text-sm font-bold text-[#3e494a]">{t('စာရင်းမရှိသေးပါ', 'No transactions yet')}</p>
               </div>

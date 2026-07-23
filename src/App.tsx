@@ -204,7 +204,6 @@ export default function App() {
         {currentTab === 'home' && (
           <HomeScreen
             userProfile={userProfile}
-            onSelectTab={setCurrentTab}
             onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
             language={language}
           />

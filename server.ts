@@ -303,10 +303,10 @@ app.get('/api/finance/nearby', async (req, res) => {
     return res.status(400).json({ error: 'Valid latitude and longitude are required' });
   }
   const query = `[out:json][timeout:25];(
-    nwr(around:15000,${lat},${lng})["amenity"="bank"];
-    nwr(around:15000,${lat},${lng})["office"~"financial|microfinance|ngo"];
-    nwr(around:15000,${lat},${lng})["name"~"microfinance|micro finance|NGO|foundation",i];
-  );out center tags 100;`;
+    nwr(around:20000,${lat},${lng})["amenity"="bank"];
+    nwr(around:20000,${lat},${lng})["office"~"financial|microfinance|ngo|association"];
+    nwr(around:20000,${lat},${lng})["name"~"bank|microfinance|micro finance|finance|credit|lending|loan|NGO|foundation",i];
+  );out center tags;`;
   try {
     const endpoints = [
       'https://overpass.private.coffee/api/interpreter',
@@ -321,14 +321,17 @@ app.get('/api/finance/nearby', async (req, res) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'FirstStep-Myanmar/1.0',
+            Accept: 'application/json',
+            'User-Agent': 'FirstStep-Myanmar/1.0 (nearby finance search)',
           },
-          body: new URLSearchParams({ data: query }),
+          body: `data=${encodeURIComponent(query)}`,
           signal: AbortSignal.timeout(12_000),
         });
         if (!overpassResponse.ok) throw new Error(`Overpass returned ${overpassResponse.status}`);
         const payload = await overpassResponse.json() as { elements?: unknown[] };
-        return res.json({ elements: Array.isArray(payload.elements) ? payload.elements : [] });
+        const elements = Array.isArray(payload.elements) ? payload.elements : [];
+        if (elements.length > 0) return res.json({ elements });
+        lastError = new Error(`Overpass returned no nearby organizations from ${endpoint}`);
       } catch (error) {
         lastError = error;
       }

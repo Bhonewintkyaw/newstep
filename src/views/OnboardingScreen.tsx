@@ -1,19 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { type ConfirmationResult, RecaptchaVerifier, signInWithPhoneNumber, updateProfile } from 'firebase/auth';
-import { ArrowRight, CheckCircle2, Store } from 'lucide-react';
-import bowingFarmerImg from '../assets/images/bowing_farmer_1784709620860.jpg';
+import { ArrowRight } from 'lucide-react';
 import { firebaseAuth, isFirebaseConfigured } from '../lib/firebase';
 
 interface OnboardingScreenProps {
   onComplete: (username: string, phone: string) => void;
   language: 'my' | 'en';
 }
-
-const FEATURES = [
-  { my: 'အနီးရှိ ငွေရေးကြေးရေးအဖွဲ့အစည်းများကို ရှာဖွေပါ', en: 'Discover financial services near you' },
-  { my: 'နေ့စဉ် အရောင်းအဝယ်နှင့် အမြတ်ငွေကို မှတ်တမ်းတင်ပါ', en: 'Track daily sales and profit' },
-  { my: 'မြန်မာဘာသာ အသံအကူအညီကို အသုံးပြုပါ', en: 'Use a Myanmar-language voice assistant' },
-];
 
 const firebaseErrorMessage = (code: string, language: 'my' | 'en') => {
   const messages: Record<string, [string, string]> = {
@@ -136,35 +129,20 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete, 
   };
 
   return (
-    <main className="min-h-dvh bg-[#f8f9fa] text-[#00201e] lg:grid lg:grid-cols-[minmax(20rem,42%)_1fr]">
-      <section className="relative flex min-h-[24rem] flex-col justify-center overflow-hidden bg-gradient-to-br from-[#00383f] via-[#00535b] to-[#006d77] px-6 py-12 text-white sm:px-10 lg:min-h-dvh lg:px-14">
-        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#9becf7]/10 blur-2xl" />
-        <button onClick={() => setLanguage((value) => value === 'my' ? 'en' : 'my')} className="absolute right-5 top-5 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-bold backdrop-blur-sm">
-          {language === 'my' ? 'English' : 'မြန်မာ'}
-        </button>
-        <div className="relative mx-auto w-full max-w-lg">
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15"><Store size={26} aria-hidden="true" /></span>
-            <div><h1 className="text-2xl font-black">ခြေလှမ်းသစ်</h1><p className="text-sm font-bold text-[#9becf7]">First Step</p></div>
+    <main className="relative flex min-h-dvh items-center justify-center bg-[#f5fbfa] px-4 py-12 text-[#00201e] sm:px-6">
+      <button onClick={() => setLanguage((value) => value === 'my' ? 'en' : 'my')} className="absolute right-4 top-4 rounded-xl border border-[#d6e8e5] bg-white px-3 py-2 text-xs font-bold text-[#00535b] shadow-sm transition hover:bg-[#e4fffb] sm:right-6 sm:top-6">
+        {language === 'my' ? '🇬🇧 English' : '🇲🇲 မြန်မာ'}
+      </button>
+      <section className="w-full max-w-md">
+        <div className="rounded-[2rem] border border-[#d6e8e5] bg-white px-6 py-8 shadow-[0_18px_50px_rgba(0,83,91,.08)] sm:px-8 sm:py-9">
+          <div className="mb-7 text-center">
+            <h1 className="text-3xl font-black tracking-tight text-[#00535b]">{t('အကောင့်ဝင်ရန်', 'Welcome back')}</h1>
+            <p className="mt-1 text-sm font-medium text-[#7a8585]">{t('ခြေလှမ်းသစ်မှ ကြိုဆိုပါသည်', 'Take your next step with us')}</p>
           </div>
-          <div className="mt-8 flex items-center gap-5">
-            <img src={bowingFarmerImg} alt="First Step" className="h-28 w-28 rounded-3xl border-4 border-white/20 object-cover shadow-xl sm:h-36 sm:w-36" />
-            <div><h2 className="text-2xl font-black sm:text-3xl">{t('သင့်လုပ်ငန်းအတွက် ပထမခြေလှမ်း', 'A better first step for your business')}</h2><p className="mt-2 text-sm font-medium text-[#c4fff8]">{t('ရိုးရှင်း၊ လုံခြုံပြီး လက်တွေ့အသုံးဝင်သော လုပ်ငန်းအကူအညီ', 'Simple, secure and practical business support')}</p></div>
-          </div>
-          <div className="mt-8 grid gap-3">
-            {FEATURES.map((feature) => <div key={feature.en} className="flex items-center gap-3 text-sm font-semibold"><CheckCircle2 className="shrink-0 text-[#ffba27]" size={20} aria-hidden="true" /><span>{t(feature.my, feature.en)}</span></div>)}
-          </div>
-        </div>
-      </section>
-
-      <section className="flex items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
-        <div className="w-full max-w-md rounded-[2rem] border border-[#bec8ca]/30 bg-white p-6 shadow-xl sm:p-8">
           <div className="mb-6">
             <p className="text-xs font-extrabold uppercase tracking-[.16em] text-[#006d77]">{step === 'phone' ? t('လုံခြုံစွာ ဝင်ရောက်ရန်', 'Secure sign in') : t('ဖုန်းနံပါတ် အတည်ပြုရန်', 'Verify phone')}</p>
-            <h2 className="mt-2 text-2xl font-black text-[#00201e]">{step === 'phone' ? t('အကောင့်ဝင်ရန်', 'Welcome back') : t('OTP ကုဒ်ထည့်ပါ', 'Enter your OTP')}</h2>
-            <p className="mt-1 text-sm text-[#3e494a]">{step === 'phone' ? t('Firebase မှ SMS ကုဒ်တစ်ခု ပို့ပေးပါမည်။', 'Firebase will send a real verification code by SMS.') : t(`${verifiedPhoneRef.current} သို့ ပို့ထားသော ကုဒ် ၆ လုံးကို ထည့်ပါ။`, `Enter the 6-digit code sent to ${verifiedPhoneRef.current}.`)}</p>
+            <p className="mt-1 text-sm text-[#3e494a]">{step === 'phone' ? t('သင့်ဖုန်းသို့ SMS ကုဒ်တစ်ခု ပို့ပေးပါမည်။', 'We will send a verification code by SMS.') : t(`${verifiedPhoneRef.current} သို့ ပို့ထားသော ကုဒ် ၆ လုံးကို ထည့်ပါ။`, `Enter the 6-digit code sent to ${verifiedPhoneRef.current}.`)}</p>
           </div>
-
           {step === 'phone' ? (
             <form onSubmit={sendOtp} className="space-y-4">
               <label className="block"><span className="mb-2 block text-xs font-bold text-[#3e494a]">{t('အသုံးပြုသူအမည်', 'Username')}</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="name" required placeholder={t('သင့်အမည်', 'Your name')} className="h-13 w-full rounded-2xl border-2 border-[#bec8ca] px-4 font-bold outline-none focus:border-[#006d77]" /></label>

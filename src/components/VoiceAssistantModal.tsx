@@ -160,9 +160,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     finalTranscriptRef.current = '';
     const recognition = new Recognition();
     recognition.lang = language === 'my' ? 'my-MM' : 'en-US';
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
+    recognition.maxAlternatives = 3;
     recognitionRef.current = recognition;
 
     recognition.onresult = (event) => {

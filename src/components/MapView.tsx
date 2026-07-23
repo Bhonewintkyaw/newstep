@@ -70,7 +70,7 @@ export const MapView: React.FC<MapViewProps> = ({
     };
   }, []);
 
-  // Update markers when they change
+  // Update markers and keep the live search location in view.
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -89,14 +89,14 @@ export const MapView: React.FC<MapViewProps> = ({
       markersRef.current.push(marker);
     });
 
-    // Fit bounds if multiple markers
-    if (markers.length > 1) {
-      const bounds = L.latLngBounds(markers.map((m) => [m.lat, m.lng] as [number, number]));
-      map.fitBounds(bounds, { padding: [50, 50] });
-    } else if (markers.length === 1) {
-      map.setView([markers[0].lat, markers[0].lng], zoom);
+    if (markers.length > 0) {
+      const points: [number, number][] = [
+        [center.lat, center.lng],
+        ...markers.map((marker) => [marker.lat, marker.lng] as [number, number]),
+      ];
+      map.fitBounds(L.latLngBounds(points), { padding: [50, 50], maxZoom: 15 });
     }
-  }, [markers]);
+  }, [center.lat, center.lng, markers, zoom]);
 
   // Update center if it changes
   useEffect(() => {
