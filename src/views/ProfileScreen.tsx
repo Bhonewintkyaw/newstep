@@ -182,8 +182,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <p className="font-extrabold text-base text-[#00201e]">{userProfile.shopName}</p>
               <p className="text-xs sm:text-sm font-medium text-[#3e494a]">
                 {language === 'my'
-                  ? 'အသေးစား စုံစမ်းရောင်းဝယ်ရေးနှင့် ကုန်စုံဆိုင်'
-                  : 'Micro Grocery & Retail Store'}
+                  ? 'ဉပမာ - ကုန်စုံဆိုင်'
+                  : 'Example - Grocery Store'}
               </p>
             </div>
           </section>
