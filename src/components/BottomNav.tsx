@@ -87,7 +87,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 ခြေလှမ်းသစ်
               </h1>
               <p className="text-[11px] font-bold text-[#006d77] mt-0.5">
-                New Step AI
+                New Step
               </p>
             </div>
           </div>
