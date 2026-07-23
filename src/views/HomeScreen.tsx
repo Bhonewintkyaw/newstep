@@ -30,7 +30,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               {language === 'my' ? `မင်္ဂလာပါ ${userProfile.name}` : `Good to see you, ${userProfile.name}`}
             </p>
             <h3 className="max-w-xl text-3xl font-black leading-tight text-[#00201e] sm:text-4xl">
-              {language === 'my' ? 'အတူတူလက်တွဲပြီး ပိုမိုကောင်းမွန်တဲ့ မနက်ဖြန်ဆီ။' : 'Together, toward a kinder and brighter tomorrow.'}
+              {language === 'my' ? 'ပိုမိုကောင်းမွန်တဲ့ မနက်ဖြန်များဆီသို့' : 'Together, toward a kinder and brighter tomorrow.'}
             </h3>
             <p className="mt-4 max-w-xl text-sm font-semibold leading-relaxed text-[#3e494a] sm:text-base">
               {language === 'my' ? 'ရိုးရိုးသားသား အလုပ်လုပ်သူတိုင်းအတွက် နွေးထွေးတဲ့ အားပေးမှုနဲ့ အကူအညီ။' : 'A warm place of support for everyday people who work hard and keep moving forward.'}
