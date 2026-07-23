@@ -33,7 +33,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               {language === 'my' ? 'ပိုမိုကောင်းမွန်တဲ့ မနက်ဖြန်များဆီသို့' : 'Together, toward a kinder and brighter tomorrow.'}
             </h3>
             <p className="mt-4 max-w-xl text-sm font-semibold leading-relaxed text-[#3e494a] sm:text-base">
-              {language === 'my' ? 'ရိုးရိုးသားသား အလုပ်လုပ်သူတိုင်းအတွက် နွေးထွေးတဲ့ အားပေးမှုနဲ့ အကူအညီ။' : 'A warm place of support for everyday people who work hard and keep moving forward.'}
+              {language === 'my' ? 'လူတိုင်းအတွက် နွေးထွေးတဲ့ အားပေးမှုနဲ့ အကူအညီပေးရာ ရပ်ဝန်းလေးတစ်ခု။' : 'A warm place of support for everyday people who work hard and keep moving forward.'}
             </p>
             <div className="mt-6 flex items-center gap-3 text-xs font-extrabold text-[#00535b]">
               <span className="material-symbols-outlined text-xl text-[#ffba27]">favorite</span>
