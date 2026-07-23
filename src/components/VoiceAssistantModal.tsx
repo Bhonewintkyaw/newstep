@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { VoiceProcessResult } from '../types';
+import { playServerTTS, stopAllSpeech } from '../hooks/useSpeechSynthesis';
 
 interface VoiceAssistantModalProps {
   isOpen: boolean;
@@ -53,17 +54,42 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
   const [activeResult, setActiveResult] = useState<VoiceProcessResult | null>(null);
   const [error, setError] = useState('');
   const [isApplied, setIsApplied] = useState(false);
+
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const finalTranscriptRef = useRef('');
 
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   const t = useCallback((my: string, en: string) => language === 'my' ? my : en, [language]);
 
-  const stopRecognition = useCallback((abort = false) => {
-    const recognition = recognitionRef.current;
-    if (!recognition) return;
-    recognitionRef.current = null;
-    if (abort) recognition.abort();
-    else recognition.stop();
+  const speakResult = useCallback((result: VoiceProcessResult) => {
+    const text = language === 'my' ? result.replyBurmese : result.replyEnglish;
+    if (!text) return;
+    void playServerTTS(text, language);
+  }, [language]);
+
+  const stopAudioRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (err) {
+        console.error('Error stopping MediaRecorder:', err);
+      }
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (err) {
+        console.error('Error stopping SpeechRecognition:', err);
+      }
+      recognitionRef.current = null;
+    }
     setIsListening(false);
   }, []);
 
@@ -75,29 +101,14 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsApplied(false);
       return;
     }
-    stopRecognition(true);
-    window.speechSynthesis?.cancel();
-  }, [isOpen, stopRecognition]);
+    stopAudioRecording();
+    stopAllSpeech();
+  }, [isOpen, stopAudioRecording]);
 
   useEffect(() => () => {
-    recognitionRef.current?.abort();
-    window.speechSynthesis?.cancel();
-  }, []);
-
-  const speakResult = useCallback((result: VoiceProcessResult) => {
-    if (!('speechSynthesis' in window)) return;
-    const text = language === 'my' ? result.replyBurmese : result.replyEnglish;
-    if (!text) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language === 'my' ? 'my-MM' : 'en-US';
-    utterance.rate = 0.92;
-    const matchingVoice = window.speechSynthesis.getVoices().find((voice) => (
-      voice.lang.toLowerCase().startsWith(language === 'my' ? 'my' : 'en')
-    ));
-    if (matchingVoice) utterance.voice = matchingVoice;
-    window.speechSynthesis.speak(utterance);
-  }, [language]);
+    stopAudioRecording();
+    stopAllSpeech();
+  }, [stopAudioRecording]);
 
   const handleProcessText = useCallback(async (textToSend: string) => {
     const transcript = textToSend.trim();
@@ -141,28 +152,118 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     }
   }, [isLoading, language, onApplyVoiceActionResult, speakResult, t]);
 
-  const startSpeechRecognition = useCallback(() => {
+  const handleProcessAudioBlob = useCallback(async (blob: Blob, mimeType: string) => {
+    if (blob.size === 0) return;
+    setIsLoading(true);
+    setIsListening(false);
+    setActiveResult(null);
+    setIsApplied(false);
+    setError('');
+
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const audioBase64 = await base64Promise;
+
+      const response = await fetch('/api/ai/voice-process-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioBase64, mimeType, currentLanguage: language }),
+      });
+
+      const payload = await response.json() as VoiceProcessResult & { transcript?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error || `Audio request failed (${response.status})`);
+
+      if (payload.transcript) {
+        setTranscriptInput(payload.transcript);
+      }
+
+      setActiveResult(payload);
+      speakResult(payload);
+      if (!isFinancialAction(payload) && payload.action !== 'GENERAL_QUERY') {
+        onApplyVoiceActionResult(payload);
+        setIsApplied(true);
+      }
+    } catch (err) {
+      console.error('Gemini audio processing failed:', err);
+      // Fallback message
+      const completedTranscript = transcriptInput.trim();
+      if (completedTranscript) {
+        void handleProcessText(completedTranscript);
+      } else {
+        setError(t(
+          'အသံဖမ်းယူမှု မအောင်မြင်ပါ။ စာရိုက်၍ တိုက်ရိုက် မေးမြန်းနိုင်ပါသည်။',
+          'Could not process voice recording. You can type your command below.',
+        ));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [handleProcessText, language, onApplyVoiceActionResult, speakResult, t, transcriptInput]);
+
+  const startListening = useCallback(async () => {
+    setError('');
+    setActiveResult(null);
+    stopAllSpeech();
+
+    // Prefer MediaRecorder for cross-browser reliability (Chrome, Safari iOS, Firefox, Android)
+    if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined') {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        audioChunksRef.current = [];
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+        const recorder = new MediaRecorder(stream, { mimeType });
+        mediaRecorderRef.current = recorder;
+
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        recorder.onstop = () => {
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+            mediaStreamRef.current = null;
+          }
+          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+          void handleProcessAudioBlob(audioBlob, mimeType);
+        };
+
+        recorder.start();
+        setIsListening(true);
+        return;
+      } catch (micErr) {
+        console.warn('MediaRecorder mic access failed or denied, trying SpeechRecognition fallback', micErr);
+      }
+    }
+
+    // Fallback: Web Speech API
     const speechWindow = window as Window & {
       SpeechRecognition?: SpeechRecognitionConstructor;
       webkitSpeechRecognition?: SpeechRecognitionConstructor;
     };
     const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
     if (!Recognition) {
       setError(t(
-        'ဤဘရောက်ဇာတွင် အသံဖမ်းစနစ် မပါဝင်ပါ။ Chrome သို့မဟုတ် Edge ကိုသုံးပါ၊ သို့မဟုတ် အောက်တွင် စာရိုက်ပါ။',
-        'Speech recognition is unavailable here. Use Chrome or Edge, or type your command below.',
+        'ဤဘရောက်ဇာတွင် မိုက်ခရိုဖုန်းအသုံးပြုခွင့် မရရှိပါ။ အောက်တွင် စာရိုက်၍ မေးမြန်းနိုင်ပါသည်။',
+        'Microphone access is unavailable here. Please type your command below.',
       ));
       return;
     }
 
-    setError('');
-    setActiveResult(null);
     finalTranscriptRef.current = '';
     const recognition = new Recognition();
     recognition.lang = language === 'my' ? 'my-MM' : 'en-US';
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 3;
     recognitionRef.current = recognition;
 
     recognition.onresult = (event) => {
@@ -176,9 +277,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       finalTranscriptRef.current = finalText;
       setTranscriptInput(`${finalText}${interimText}`.trim());
     };
+
     recognition.onerror = (event) => {
       recognitionRef.current = null;
-      finalTranscriptRef.current = '';
       setIsListening(false);
       const messages: Record<string, [string, string]> = {
         'not-allowed': ['မိုက်ခရိုဖုန်းအသုံးပြုခွင့် ပေးရန်လိုပါသည်။', 'Allow microphone access to use voice commands.'],
@@ -189,6 +290,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       const localized = messages[event.error] || ['အသံဖမ်းမှု မအောင်မြင်ပါ။ ထပ်မံကြိုးစားပါ။', 'Speech recognition failed. Please try again.'];
       setError(language === 'my' ? localized[0] : localized[1]);
     };
+
     recognition.onend = () => {
       recognitionRef.current = null;
       setIsListening(false);
@@ -205,7 +307,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       setIsListening(false);
       setError(t('မိုက်ခရိုဖုန်းကို စတင်၍မရပါ။ ထပ်မံကြိုးစားပါ။', 'Could not start the microphone. Please try again.'));
     }
-  }, [handleProcessText, language, t]);
+  }, [handleProcessAudioBlob, handleProcessText, language, t]);
 
   if (!isOpen) return null;
 
@@ -237,7 +339,7 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
             {isListening && <div className="absolute inset-0 scale-150 animate-ping rounded-full bg-[#00535b]/30" />}
             <button
               type="button"
-              onClick={() => isListening ? stopRecognition() : startSpeechRecognition()}
+              onClick={() => isListening ? stopAudioRecording() : void startListening()}
               disabled={isLoading}
               aria-label={isListening ? t('အသံဖမ်းမှု ရပ်မည်', 'Stop listening') : t('အသံဖမ်းမည်', 'Start listening')}
               className={`voice-pulse relative z-10 flex h-28 w-28 items-center justify-center rounded-full text-white shadow-xl transition active:scale-95 disabled:opacity-50 ${isListening ? 'bg-[#ffba27] text-[#00201e]' : 'bg-[#00535b]'}`}

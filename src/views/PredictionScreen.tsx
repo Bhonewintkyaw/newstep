@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { WeatherData, MarketRecommendation } from '../types';
 import { FloatingMicButton } from '../components/FloatingMicButton';
+import { playServerTTS, stopAllSpeech } from '../hooks/useSpeechSynthesis';
 
 interface PredictionScreenProps {
   weatherData: WeatherData;
@@ -97,25 +98,13 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
 
   const handlePlayVoiceAnnouncement = () => {
     setIsPlayingAudio(true);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const isBurmese = language === 'my';
-      const text = isBurmese
-        ? currentWeather.voiceAnnouncementBurmese
-        : `${currentWeather.city} temperature is ${currentWeather.tempCelsius} degrees Celsius, ${currentWeather.conditionEnglish}, with a ${currentWeather.rainProbabilityPercent}% chance of rain.`;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = isBurmese ? 'my-MM' : 'en-US';
-      const preferredVoice = window.speechSynthesis.getVoices().find((voice) => (
-        voice.lang.toLowerCase().startsWith(isBurmese ? 'my' : 'en')
-      ));
-      if (preferredVoice) utterance.voice = preferredVoice;
-      utterance.rate = 0.9;
-      utterance.onend = () => setIsPlayingAudio(false);
-      utterance.onerror = () => setIsPlayingAudio(false);
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setTimeout(() => setIsPlayingAudio(false), 3000);
-    }
+    const isBurmese = language === 'my';
+    const text = isBurmese
+      ? currentWeather.voiceAnnouncementBurmese
+      : `${currentWeather.city} temperature is ${currentWeather.tempCelsius} degrees Celsius, ${currentWeather.conditionEnglish}, with a ${currentWeather.rainProbabilityPercent}% chance of rain.`;
+    playServerTTS(text, language).finally(() => {
+      setIsPlayingAudio(false);
+    });
   };
 
   const t = (my: string, en: string) => (language === 'my' ? my : en);

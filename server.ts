@@ -138,6 +138,109 @@ function validateVoiceResult(candidate: unknown, transcript: string): VoiceResul
   };
 }
 
+// Built-in Text-to-Speech (TTS) Endpoint for Burmese and English
+app.get('/api/tts', async (req, res) => {
+  const text = typeof req.query.text === 'string' ? req.query.text.trim() : '';
+  const lang = req.query.lang === 'my' || req.query.lang === 'en' ? req.query.lang : 'my';
+  if (!text) return res.status(400).send('Text parameter is required');
+  if (text.length > 600) return res.status(400).send('Text too long');
+
+  try {
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
+    const response = await fetch(ttsUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`TTS server responded with ${response.status}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Cache-Control': 'public, max-age=86400',
+    });
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    console.error('Error fetching TTS audio:', err);
+    return res.status(500).send('Failed to generate audio');
+  }
+});
+
+// AI Multimodal Audio Processing Route (STT + Intent Analysis)
+app.post('/api/ai/voice-process-audio', async (req, res) => {
+  const { audioBase64, mimeType = 'audio/webm' } = req.body || {};
+  if (!audioBase64 || typeof audioBase64 !== 'string') {
+    return res.status(400).json({ error: 'Audio data is required' });
+  }
+
+  const ai = getGeminiClient();
+  if (!ai) {
+    return res.status(503).json({
+      error: 'GEMINI_API_KEY is missing. Audio processing requires Gemini API key.',
+    });
+  }
+
+  try {
+    const cleanBase64 = audioBase64.replace(/^data:audio\/[a-z0-9]+;base64,/, '');
+    const prompt = `Listen to this recorded audio command spoken by a small-business owner in Myanmar (Burmese or English).
+1. Transcribe the spoken user command accurately into the 'transcript' field.
+2. Classify the user's command into one of these actions: RECORD_SALE, RECORD_PURCHASE, CHECK_LOAN, CHECK_WEATHER, INVENTORY_INQUIRY, GENERAL_QUERY.
+3. If recording a sale or purchase, extract the item name and exact total amount in MMK if spoken.
+4. Respond with concise, helpful confirmation replies in both replyBurmese and replyEnglish.`;
+
+    const response = await ai.models.generateContent({
+      model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.6-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType,
+                data: cleanBase64,
+              },
+            },
+            {
+              text: prompt,
+            },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            transcript: { type: Type.STRING },
+            action: { type: Type.STRING, enum: [...voiceActions] },
+            itemName: { type: Type.STRING },
+            quantity: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            replyBurmese: { type: Type.STRING },
+            replyEnglish: { type: Type.STRING },
+          },
+          required: ['transcript', 'action', 'replyBurmese', 'replyEnglish'],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+    const transcript = parsed.transcript || '';
+    const result = validateVoiceResult(parsed, transcript);
+
+    return res.json({
+      transcript,
+      ...result,
+    });
+  } catch (error) {
+    console.error('Audio processing with Gemini failed:', error);
+    return res.status(500).json({ error: 'Failed to process audio recording.' });
+  }
+});
+
 // AI Voice Processing Route. A deterministic parser remains available when Gemini is unavailable.
 app.post('/api/ai/voice-process', async (req, res) => {
   const transcript = typeof req.body?.transcript === 'string' ? req.body.transcript.trim() : '';
