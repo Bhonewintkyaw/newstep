@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
               ခြေလှမ်းသစ်
             </h1>
             <span className="hidden min-[430px]:inline text-xs font-bold px-2.5 py-0.5 rounded-full bg-[#006d77]/10 text-[#00535b] shrink-0">
-              First Step
+              New Step
             </span>
           </button>
         </div>
@@ -184,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               <div className="text-center text-xs text-gray-400 pt-2">
-                First Step v1.0 • Myanmar Micro-Business AI
+                New Step v1.0 • Myanmar Micro-Business AI
               </div>
             </div>
           </div>

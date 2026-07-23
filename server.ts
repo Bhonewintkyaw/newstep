@@ -29,7 +29,7 @@ function getGeminiClient() {
 
 // Health Check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'First Step (ခြေလှမ်းသစ်)' });
+  res.json({ status: 'ok', app: 'New Step (ခြေလှမ်းသစ်)' });
 });
 
 type VoiceAction = 'RECORD_SALE' | 'RECORD_PURCHASE' | 'CHECK_LOAN' | 'CHECK_WEATHER' | 'INVENTORY_INQUIRY' | 'GENERAL_QUERY';
@@ -322,7 +322,7 @@ app.get('/api/finance/nearby', async (req, res) => {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             Accept: 'application/json',
-            'User-Agent': 'FirstStep-Myanmar/1.0 (nearby finance search)',
+            'User-Agent': 'NewStep-Myanmar/1.0 (nearby finance search)',
           },
           body: `data=${encodeURIComponent(query)}`,
           signal: AbortSignal.timeout(12_000),

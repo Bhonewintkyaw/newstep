@@ -84,7 +84,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 ခြေလှမ်းသစ်
               </h1>
               <p className="text-[11px] font-bold text-[#006d77] mt-0.5">
-                First Step AI
+                New Step AI
               </p>
             </div>
           </div>
@@ -181,7 +181,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
           {/* Version / Info */}
           <div className="text-center text-[10px] text-gray-500 font-medium">
-            First Step v1.0 • Desktop Mode
+            New Step v1.0 • Desktop Mode
           </div>
         </div>
       </aside>

@@ -24,7 +24,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="max-w-2xl">
             <span className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/75 px-3.5 py-2 text-xs font-extrabold text-[#00535b] shadow-sm">
               <span className="material-symbols-outlined text-base text-[#ffba27]">light_mode</span>
-              {language === 'my' ? 'ခြေလှမ်းသစ်မှ ကြိုဆိုပါသည်' : 'Welcome to First Step'}
+              {language === 'my' ? 'ခြေလှမ်းသစ်မှ ကြိုဆိုပါသည်' : 'Welcome to New Step'}
             </span>
             <p className="mb-2 text-sm font-extrabold text-[#006d77]">
               {language === 'my' ? `မင်္ဂလာပါ ${userProfile.name}` : `Good to see you, ${userProfile.name}`}
