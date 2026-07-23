@@ -4,6 +4,11 @@ import { MetricPeriodSelector } from '../components/MetricPeriodSelector';
 import { FloatingMicButton } from '../components/FloatingMicButton';
 import { VoicePlayButton } from '../components/VoicePlayButton';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
+import {
+  calculateCoveragePercent,
+  calculateMonthlyRepayment,
+  calculatePeriodMetrics,
+} from '../lib/financialCalculations';
 
 interface InventoryScreenProps {
   inventory: InventoryItem[];
@@ -34,43 +39,45 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newAmount, setNewAmount] = useState('');
 
-  const salesTx = transactions.filter((t) => t.type === 'sale');
-  const purchaseTx = transactions.filter((t) => t.type === 'purchase');
+  const dailyMetrics = calculatePeriodMetrics(transactions, 'daily');
+  const monthlyMetrics = calculatePeriodMetrics(transactions, 'monthly');
+  const yearlyMetrics = calculatePeriodMetrics(transactions, 'yearly');
+  const activeMetrics =
+    activeFinancialPeriod === 'daily'
+      ? dailyMetrics
+      : activeFinancialPeriod === 'monthly'
+        ? monthlyMetrics
+        : yearlyMetrics;
 
-  const totalSalesFromTx = salesTx.reduce((sum, t) => sum + t.amountMMK, 0);
-  const calculatedProfitFromTx = salesTx.reduce((sum, t) => sum + (t.profitMMK || Math.round(t.amountMMK * 0.2)), 0);
+  const requiredMonthlyRepayment = calculateMonthlyRepayment(
+    registeredLoanProfile?.weeklyRepaymentMMK ?? 0,
+  );
+  const monthlyProfit = monthlyMetrics.profitMMK;
+  const coveragePercent = calculateCoveragePercent(monthlyProfit, requiredMonthlyRepayment);
+  const coverageRatio = coveragePercent === null ? null : Math.round(coveragePercent);
 
-  const metrics = {
-    dailySalesMMK: totalSalesFromTx,
-    dailyProfitMMK: calculatedProfitFromTx,
-    monthlySalesMMK: totalSalesFromTx * 26,
-    monthlyProfitMMK: calculatedProfitFromTx * 26,
-    yearlySalesMMK: totalSalesFromTx * 310,
-    yearlyProfitMMK: calculatedProfitFromTx * 310,
-  };
+  let statusBadgeBurmese = 'ချေးငွေစာရင်း မရှိသေးပါ';
+  let statusBadgeEnglish = 'No loan record';
 
-  const requiredMonthlyRepayment = (registeredLoanProfile?.weeklyRepaymentMMK ?? 0) * 4;
-  const monthlyProfit = metrics.monthlyProfitMMK;
-  const coverageRatio = Math.round((monthlyProfit / (requiredMonthlyRepayment || 1)) * 100);
-
-  let repaymentStatus: 'safe' | 'moderate' | 'warning' = 'safe';
-  let statusBadgeBurmese = 'စိတ်ချရသော အခြေအနေ';
-  let statusBadgeEnglish = 'High Safety Coverage';
-
-  if (coverageRatio < 120) {
-    repaymentStatus = 'warning';
+  if (coverageRatio !== null && coverageRatio < 120) {
     statusBadgeBurmese = 'သတိပြုရန် အခြေအနေ';
     statusBadgeEnglish = 'Low Coverage Risk Warning';
-  } else if (coverageRatio < 200) {
-    repaymentStatus = 'moderate';
+  } else if (coverageRatio !== null && coverageRatio < 200) {
     statusBadgeBurmese = 'သင့်တင့်သော အခြေအနေ';
     statusBadgeEnglish = 'Moderate Coverage';
+  } else if (coverageRatio !== null) {
+    statusBadgeBurmese = 'စိတ်ချရသော အခြေအနေ';
+    statusBadgeEnglish = 'High Safety Coverage';
   }
 
   const handlePlayAnalysisVoice = () => {
     const text = language === 'my'
-      ? `မန်နေဂျာ AI ၏ စီးပွားရေး သုံးသပ်ချက်။ သင့်ဆိုင်၏ လစဉ်အမြတ်ငွေ ${monthlyProfit.toLocaleString()} ကျပ် ဖြစ်ပြီး၊ လစဉ်ချေးငွေဆပ်ရန် လိုအပ်ချက် ${requiredMonthlyRepayment.toLocaleString()} ကျပ်ထက် ${coverageRatio} ရာခိုင်နှုန်း ဖြစ်ပါသည်။ ချေးငွေပြန်ဆပ်ရန် ${statusBadgeBurmese} ဖြစ်ပါသည်။`
-      : `AI manager business analysis. Your monthly profit is ${monthlyProfit.toLocaleString()} MMK. Your required monthly loan repayment is ${requiredMonthlyRepayment.toLocaleString()} MMK. Your repayment coverage is ${coverageRatio} percent. The repayment status is ${statusBadgeEnglish}.`;
+      ? coverageRatio === null
+        ? `မန်နေဂျာ AI ၏ စီးပွားရေး သုံးသပ်ချက်။ သင့်ဆိုင်၏ လစဉ်အမြတ်ငွေ ${monthlyProfit.toLocaleString()} ကျပ် ဖြစ်ပါသည်။ ပြန်ဆပ်နိုင်စွမ်းတွက်ရန် ချေးငွေစာရင်း ထည့်သွင်းပါ။`
+        : `မန်နေဂျာ AI ၏ စီးပွားရေး သုံးသပ်ချက်။ သင့်ဆိုင်၏ လစဉ်အမြတ်ငွေ ${monthlyProfit.toLocaleString()} ကျပ် ဖြစ်ပြီး၊ ခန့်မှန်းလစဉ်ချေးငွေဆပ်ရန် လိုအပ်ချက် ${Math.round(requiredMonthlyRepayment).toLocaleString()} ကျပ်၏ ${coverageRatio} ရာခိုင်နှုန်း ဖြစ်ပါသည်။ ချေးငွေပြန်ဆပ်ရန် ${statusBadgeBurmese} ဖြစ်ပါသည်။`
+      : coverageRatio === null
+        ? `AI manager business analysis. Your monthly profit is ${monthlyProfit.toLocaleString()} MMK. Add a loan record to calculate repayment coverage.`
+        : `AI manager business analysis. Your monthly profit is ${monthlyProfit.toLocaleString()} MMK. Your estimated monthly loan repayment is ${Math.round(requiredMonthlyRepayment).toLocaleString()} MMK. Your repayment coverage is ${coverageRatio} percent. The repayment status is ${statusBadgeEnglish}.`;
     speakAnalysis(text, language);
   };
 
@@ -170,27 +177,20 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <span className="material-symbols-outlined text-lg">trending_up</span>
             </div>
             <p className="text-2xl font-extrabold text-[#00535b]">
-              {(activeFinancialPeriod === 'daily'
-                ? metrics.dailySalesMMK
-                : activeFinancialPeriod === 'monthly'
-                ? metrics.monthlySalesMMK
-                : metrics.yearlySalesMMK
-              ).toLocaleString()} <span className="text-xs font-semibold">MMK</span>
+              {activeMetrics.salesMMK.toLocaleString()} <span className="text-xs font-semibold">MMK</span>
             </p>
           </div>
 
           <div className="p-4 bg-[#ffdea9]/30 rounded-2xl border border-[#825b00]/20 space-y-1">
             <div className="flex justify-between items-center text-xs text-[#634500] font-bold">
-              <span>{t('နေ့စဉ် အသားတင် အမြတ်', 'Daily Profit')}</span>
+              <span>{t(
+                activeFinancialPeriod === 'daily' ? 'နေ့စဉ် အသားတင် အမြတ်' : activeFinancialPeriod === 'monthly' ? 'လစဉ် အသားတင် အမြတ်' : 'နှစ်စဉ် အသားတင် အမြတ်',
+                activeFinancialPeriod === 'daily' ? 'Daily Profit' : activeFinancialPeriod === 'monthly' ? 'Monthly Profit' : 'Yearly Profit',
+              )}</span>
               <span className="material-symbols-outlined text-lg">monetization_on</span>
             </div>
             <p className="text-2xl font-extrabold text-[#634500]">
-              {(activeFinancialPeriod === 'daily'
-                ? metrics.dailyProfitMMK
-                : activeFinancialPeriod === 'monthly'
-                ? metrics.monthlyProfitMMK
-                : metrics.yearlyProfitMMK
-              ).toLocaleString()} <span className="text-xs font-semibold">MMK</span>
+              {activeMetrics.profitMMK.toLocaleString()} <span className="text-xs font-semibold">MMK</span>
             </p>
           </div>
 
@@ -199,7 +199,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <span>{t('ပျမ်းမျှ အမြတ် ရာခိုင်နှုန်း', 'Avg Profit Margin')}</span>
               <span className="material-symbols-outlined text-lg">pie_chart</span>
             </div>
-            <p className="text-2xl font-extrabold text-[#00201e]">21.5%</p>
+            <p className="text-2xl font-extrabold text-[#00201e]">
+              {activeMetrics.profitMarginPercent.toFixed(1)}%
+            </p>
           </div>
         </div>
       </section>
@@ -230,16 +232,23 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               {t('ပြန်ဆပ်နိုင်စွမ်း အညွှန်း', 'Safety Index')}
             </span>
             <div className="flex items-center gap-2">
-              <span className="text-3xl font-extrabold text-[#00535b]">{coverageRatio}%</span>
+              <span className="text-3xl font-extrabold text-[#00535b]">
+                {coverageRatio === null ? '—' : `${coverageRatio}%`}
+              </span>
               <span className="px-2.5 py-1 bg-[#b7fbf3] text-[#00535b] text-xs font-extrabold rounded-lg">
                 {t(statusBadgeBurmese, statusBadgeEnglish)}
               </span>
             </div>
             <p className="text-xs text-gray-600 font-medium leading-tight">
-              {t(
-                `လစဉ် အမြတ်ငွေ (${metrics.monthlyProfitMMK.toLocaleString()} ကျပ်) သည် လစဉ် ချေးငွေဆပ်ရန် (${requiredMonthlyRepayment.toLocaleString()} ကျပ်) ထက် ၄ ဆ ပိုမိုပါသည်`,
-                `Monthly profit (${metrics.monthlyProfitMMK.toLocaleString()} MMK) covers required repayment (${requiredMonthlyRepayment.toLocaleString()} MMK) safely.`
-              )}
+              {coverageRatio === null
+                ? t(
+                    'ပြန်ဆပ်နိုင်စွမ်းတွက်ရန် ချေးငွေစာရင်း ထည့်သွင်းပါ။',
+                    'Add a loan record to calculate repayment coverage.',
+                  )
+                : t(
+                    `လစဉ် အမြတ်ငွေ (${monthlyProfit.toLocaleString()} ကျပ်) သည် ခန့်မှန်းလစဉ် ချေးငွေဆပ်ငွေ (${Math.round(requiredMonthlyRepayment).toLocaleString()} ကျပ်) ၏ ${coverageRatio}% ဖြစ်ပါသည်။`,
+                    `Monthly profit (${monthlyProfit.toLocaleString()} MMK) is ${coverageRatio}% of the estimated monthly repayment (${Math.round(requiredMonthlyRepayment).toLocaleString()} MMK).`,
+                  )}
             </p>
           </div>
 
@@ -249,7 +258,25 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <span>{t('AI မန်နေဂျာ၏ အကြံပြုချက်နှင့် သတိပေးချက်:', 'AI Manager Warning & Advisory:')}</span>
             </p>
             <p className="text-xs sm:text-sm text-[#00201e] leading-relaxed font-semibold">
-              {t('ယခုလ အမြတ်ငွေသည် ချေးငွေပြန်ဆပ်ရန် လုံလောက်စွာ ရှိပါသည်။ လာမည့် ၅ ရက်အတွင်း အပတ်စဉ် အရစ်ကျ ၅၀,၀၀၀ ကျပ် ပေးဆပ်ရန် အဆင်သင့် ရှိပါသည်။', 'Profit margin is fully sufficient for scheduled weekly repayment of 50,000 MMK.')}
+              {coverageRatio === null
+                ? t(
+                    'ချေးငွေအချက်အလက် ထည့်သွင်းပြီးမှ ပြန်ဆပ်နိုင်စွမ်းကို သုံးသပ်နိုင်ပါမည်။',
+                    'Add loan details before evaluating repayment capacity.',
+                  )
+                : coverageRatio >= 200
+                  ? t(
+                      'လက်ရှိလစဉ် အမြတ်ငွေသည် ခန့်မှန်းလစဉ် ချေးငွေဆပ်ငွေကို လုံလောက်စွာ ကာမိပါသည်။',
+                      'Current monthly profit comfortably covers the estimated monthly repayment.',
+                    )
+                  : coverageRatio >= 120
+                    ? t(
+                        'လက်ရှိအမြတ်ငွေက ချေးငွေဆပ်ငွေကို ကာမိသော်လည်း ငွေသားအရန်ထားရှိပါ။',
+                        'Current profit covers repayment, but keep a cash reserve.',
+                      )
+                    : t(
+                        'လက်ရှိအမြတ်ငွေသည် ချေးငွေဆပ်ငွေကို မလုံလောက်သေးပါ။ အသုံးစရိတ်နှင့် ဆပ်ငွေအစီအစဉ်ကို ပြန်စစ်ပါ။',
+                        'Current profit does not yet cover repayment. Review costs and the repayment plan.',
+                      )}
             </p>
             <div className="pt-1 flex flex-wrap gap-2 text-[11px] font-bold text-[#00535b]">
               <span className="px-2.5 py-1 bg-white rounded-md border border-[#00535b]/15">💡 ဆန်နှင့် ဆီ ရောင်းအားကို ဆက်လက်ထိန်းသိမ်းပါ</span>
