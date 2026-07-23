@@ -109,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   <span className="material-symbols-outlined">home</span>
-                  <span>{language === 'my' ? 'ပင်မစာမျက်နှာ (Home)' : 'Home'}</span>
+                  <span>{language === 'my' ? 'ပင်မစာမျက်နှာ' : 'Home'}</span>
                 </button>
 
                 <button
@@ -124,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   <span className="material-symbols-outlined">account_balance</span>
-                  <span>{language === 'my' ? 'ချေးငွေဝန်ဆောင်မှု (Loans)' : 'Loans'}</span>
+                  <span>{language === 'my' ? 'ချေးငွေဝန်ဆောင်မှု' : 'Loans'}</span>
                 </button>
 
                 <button
@@ -139,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   <span className="material-symbols-outlined">inventory_2</span>
-                  <span>{language === 'my' ? 'ကုန်ပစ္စည်းစာရင်း (Inventory)' : 'Inventory'}</span>
+                  <span>{language === 'my' ? 'ကုန်ပစ္စည်းစာရင်း' : 'Inventory'}</span>
                 </button>
 
                 <button

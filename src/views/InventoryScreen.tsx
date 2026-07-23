@@ -54,16 +54,16 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   const coverageRatio = Math.round((monthlyProfit / (requiredMonthlyRepayment || 1)) * 100);
 
   let repaymentStatus: 'safe' | 'moderate' | 'warning' = 'safe';
-  let statusBadgeBurmese = 'စိတ်ချရသောအခြေအနေ (High Safety)';
+  let statusBadgeBurmese = 'စိတ်ချရသော အခြေအနေ';
   let statusBadgeEnglish = 'High Safety Coverage';
 
   if (coverageRatio < 120) {
     repaymentStatus = 'warning';
-    statusBadgeBurmese = 'သတိပြုရန် အခြေအနေ (Caution Needed)';
+    statusBadgeBurmese = 'သတိပြုရန် အခြေအနေ';
     statusBadgeEnglish = 'Low Coverage Risk Warning';
   } else if (coverageRatio < 200) {
     repaymentStatus = 'moderate';
-    statusBadgeBurmese = 'သင့်တင့်သော အခြေအနေ (Moderate)';
+    statusBadgeBurmese = 'သင့်တင့်သော အခြေအနေ';
     statusBadgeEnglish = 'Moderate Coverage';
   }
 
@@ -161,7 +161,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <div className="p-4 bg-[#e4fffb] rounded-2xl border border-[#00535b]/20 space-y-1">
             <div className="flex justify-between items-center text-xs text-[#00535b] font-bold">
-              <span>{t('နေ့စဉ် စုစုပေါင်း အရောင်း', 'Daily Sales').replace(/^.+? /, activeFinancialPeriod === 'daily' ? '' : activeFinancialPeriod === 'monthly' ? 'လစဉ် ' : 'နှစ်စဉ် ')}</span>
+              <span>{t(
+                activeFinancialPeriod === 'daily' ? 'နေ့စဉ် စုစုပေါင်း အရောင်း' : activeFinancialPeriod === 'monthly' ? 'လစဉ် စုစုပေါင်း အရောင်း' : 'နှစ်စဉ် စုစုပေါင်း အရောင်း',
+                activeFinancialPeriod === 'daily' ? 'Daily Sales' : activeFinancialPeriod === 'monthly' ? 'Monthly Sales' : 'Yearly Sales'
+              )}</span>
               <span className="material-symbols-outlined text-lg">trending_up</span>
             </div>
             <p className="text-2xl font-extrabold text-[#00535b]">
@@ -191,7 +194,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
           <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-1">
             <div className="flex justify-between items-center text-xs text-gray-600 font-bold">
-              <span>{t('အမြတ် ရာခိုင်နှုန်း (Profit Margin)', 'Avg Profit Margin')}</span>
+              <span>{t('ပျမ်းမျှ အမြတ် ရာခိုင်နှုန်း', 'Avg Profit Margin')}</span>
               <span className="material-symbols-outlined text-lg">pie_chart</span>
             </div>
             <p className="text-2xl font-extrabold text-[#00201e]">21.5%</p>
@@ -204,7 +207,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           <div>
             <h3 className="font-extrabold text-base text-[#00535b] flex items-center gap-2">
               <span className="material-symbols-outlined text-2xl text-[#8c4e35]">account_balance_wallet</span>
-              <span>{t('ချေးငွေ ပြန်ဆပ်နိုင်စွမ်း သုံးသပ်ချက် (Repayment Analysis)', 'Loan Repayment Capacity Analysis')}</span>
+              <span>{t('ချေးငွေ ပြန်ဆပ်နိုင်စွမ်း သုံးသပ်ချက်', 'Loan Repayment Capacity Analysis')}</span>
             </h3>
             <p className="text-xs text-[#3e494a] font-semibold mt-0.5">
               {t('ဆိုင်၏ အမြတ်ငွေနှင့် ဘဏ်ချေးငွေ ပြန်ဆပ်ရမည့် ပမာဏကို AI မှ နှိုင်းယှဉ် တွက်ချက်ထားခြင်း', 'AI evaluates if monthly profits cover required bank loan repayments within deadline')}

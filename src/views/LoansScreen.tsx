@@ -38,13 +38,13 @@ const FILTERS: Array<{ id: 'all' | OrganizationType; labelMy: string; labelEn: s
   { id: 'all', labelMy: 'အားလုံး', labelEn: 'All' },
   { id: 'bank', labelMy: 'ဘဏ်များ', labelEn: 'Banks' },
   { id: 'microfinance', labelMy: 'အသေးစားငွေရေးကြေးရေး', labelEn: 'Microfinance' },
-  { id: 'ngo', labelMy: 'NGO အဖွဲ့အစည်းများ', labelEn: 'NGOs' },
+  { id: 'ngo', labelMy: 'အကျိုးအမြတ်မယူသော အဖွဲ့အစည်းများ', labelEn: 'NGOs' },
 ];
 
 const TYPE_META: Record<OrganizationType, { icon: string; labelMy: string; labelEn: string; color: string }> = {
   bank: { icon: 'account_balance', labelMy: 'ဘဏ်', labelEn: 'Bank', color: 'bg-[#e0f2f1] text-[#00535b]' },
   microfinance: { icon: 'payments', labelMy: 'အသေးစားငွေရေးကြေးရေး', labelEn: 'Microfinance', color: 'bg-[#fff0e9] text-[#8c4e35]' },
-  ngo: { icon: 'diversity_3', labelMy: 'NGO အဖွဲ့အစည်း', labelEn: 'NGO', color: 'bg-[#fff4d6] text-[#825b00]' },
+  ngo: { icon: 'diversity_3', labelMy: 'အကျိုးအမြတ်မယူသော အဖွဲ့အစည်း', labelEn: 'NGO', color: 'bg-[#fff4d6] text-[#825b00]' },
 };
 
 const distanceBetween = (lat1: number, lng1: number, lat2: number, lng2: number) => {

@@ -198,7 +198,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-[#00535b]">translate</span>
                 <span className="text-xs sm:text-sm font-bold text-[#00201e]">
-                  {language === 'my' ? 'ဘာသာစကား (Language)' : 'Language'}
+                  {language === 'my' ? 'ဘာသာစကား' : 'Language'}
                 </span>
               </div>
               <button
@@ -217,7 +217,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </span>
               </div>
               <span className="text-xs font-bold text-[#00535b] bg-[#b7fbf3] px-3 py-1 rounded-full">
-                Active
+                {language === 'my' ? 'အသုံးပြုနေသည်' : 'Active'}
               </span>
             </div>
 
@@ -230,7 +230,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   <span className="material-symbols-outlined text-base">logout</span>
                   <span>
                     {language === 'my'
-                      ? 'အကောင့်ထွက်မည် / လော့ဂ်အင်ဝင်မည် (Login Screen)'
+                      ? 'အကောင့်ထွက်မည် / လော့ဂ်အင်ဝင်မည်'
                       : 'Log Out / Go to Login Screen'}
                   </span>
                 </button>
@@ -295,7 +295,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               {/* User Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-[#3e494a] block">
-                  {language === 'my' ? 'အမည် / နာမည် (User Name)' : 'User Name'}
+                  {language === 'my' ? 'အမည် / နာမည်' : 'User Name'}
                 </label>
                 <input
                   type="text"
@@ -310,7 +310,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               {/* Shop Name */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-[#3e494a] block">
-                  {language === 'my' ? 'ဆိုင် / လုပ်ငန်း အမည် (Shop Name)' : 'Shop Name'}
+                  {language === 'my' ? 'ဆိုင် / လုပ်ငန်း အမည်' : 'Shop Name'}
                 </label>
                 <input
                   type="text"
@@ -325,7 +325,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               {/* Phone */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-[#3e494a] block">
-                  {language === 'my' ? 'ဖုန်းနံပါတ် (Phone Number)' : 'Phone Number'}
+                  {language === 'my' ? 'ဖုန်းနံပါတ်' : 'Phone Number'}
                 </label>
                 <input
                   type="text"
@@ -339,7 +339,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               {/* City */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-[#3e494a] block">
-                  {language === 'my' ? 'မြို့နယ် / ဒေသ (City/Township)' : 'City/Township'}
+                  {language === 'my' ? 'မြို့နယ် / ဒေသ' : 'City/Township'}
                 </label>
                 <input
                   type="text"
