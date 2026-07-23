@@ -27,13 +27,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     icon: string;
     labelEnglish: string;
     burmeseMain: string;
-    burmeseSub: string;
   }[] = [
-    { id: 'home', icon: 'home', labelEnglish: 'Home', burmeseMain: 'ပင်မ', burmeseSub: 'Home' },
-    { id: 'loans', icon: 'account_balance', labelEnglish: 'Finance', burmeseMain: 'ငွေရေးကြေးရေး', burmeseSub: 'Finance' },
-    { id: 'prediction', icon: 'auto_awesome', labelEnglish: 'AI Forecast', burmeseMain: 'ခန့်မှန်းချက်', burmeseSub: 'Prediction' },
-    { id: 'inventory', icon: 'inventory_2', labelEnglish: 'Inventory', burmeseMain: 'ကုန်ပစ္စည်း', burmeseSub: 'Inventory' },
-    { id: 'profile', icon: 'person', labelEnglish: 'Profile', burmeseMain: 'ပရိုဖိုင်', burmeseSub: 'Profile' },
+    { id: 'home', icon: 'home', labelEnglish: 'Home', burmeseMain: 'ပင်မ' },
+    { id: 'loans', icon: 'account_balance', labelEnglish: 'Finance', burmeseMain: 'ငွေရေးကြေးရေး' },
+    { id: 'prediction', icon: 'auto_awesome', labelEnglish: 'AI Forecast', burmeseMain: 'AI ခန့်မှန်းချက်' },
+    { id: 'inventory', icon: 'inventory_2', labelEnglish: 'Inventory', burmeseMain: 'ကုန်ပစ္စည်း' },
+    { id: 'profile', icon: 'person', labelEnglish: 'Profile', burmeseMain: 'ပရိုဖိုင်' },
   ];
 
   return (
@@ -50,7 +49,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               key={item.id}
               onClick={() => onSelectTab(item.id)}
               aria-current={isActive ? 'page' : undefined}
-              aria-label={item.labelEnglish}
+              aria-label={language === 'my' ? item.burmeseMain : item.labelEnglish}
               className={`min-w-0 min-h-14 flex flex-col items-center justify-center px-1 py-1.5 transition-all duration-200 rounded-xl cursor-pointer ${
                 isActive
                   ? 'bg-[#006d77] text-[#9becf7] shadow-sm scale-95'
@@ -65,7 +64,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                 {item.icon}
               </span>
               <span className="w-full truncate text-center text-[10px] min-[380px]:text-[11px] font-semibold mt-0.5 tracking-tight">
-                {item.labelEnglish}
+                {language === 'my' ? item.burmeseMain : item.labelEnglish}
               </span>
             </button>
           );
@@ -143,15 +142,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                     <span className="font-bold text-sm truncate">
                       {language === 'my' ? item.burmeseMain : item.labelEnglish}
                     </span>
-                    {language === 'my' && (
-                      <span
-                        className={`text-[10px] font-semibold mt-0.5 ${
-                          isActive ? 'text-[#9becf7]' : 'text-[#3e494a]'
-                        }`}
-                      >
-                        ({item.burmeseSub})
-                      </span>
-                    )}
                   </div>
                 </button>
               );

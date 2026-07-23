@@ -91,7 +91,7 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
       );
     } else {
       setIsLocating(false);
-      setLocationMessage('Geolocation not supported.');
+      setLocationMessage(t('ဤဘရောက်ဇာတွင် တည်နေရာစနစ် မပါဝင်ပါ။', 'Geolocation is not supported.'));
     }
   };
 
@@ -120,7 +120,7 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
             <span>{t('AI ရာသီဥတုနှင့် ဈေးကွက် ခန့်မှန်းချက်', 'AI Weather & Market Predictions')}</span>
           </h2>
           <p className="text-xs sm:text-sm text-[#3e494a] font-semibold mt-1">
-            {t('Live weather data & smart market recommendations', 'တိုက်ရိုက်ရာသီဥတုအချက်အလက်နှင့် ဈေးကွက်အကြံပြုချက်များ')}
+            {t('တိုက်ရိုက်ရာသီဥတုအချက်အလက်နှင့် ဈေးကွက်အကြံပြုချက်များ', 'Live weather data & smart market recommendations')}
           </p>
         </div>
         <button
@@ -158,7 +158,7 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
                 {t('မိုးလေဝသခန့်မှန်းချက်', 'Live Weather Forecast')}
               </span>
             </div>
-            <h3 className="text-2xl font-extrabold mt-1">{currentWeather.cityBurmese} ({currentWeather.city})</h3>
+            <h3 className="text-2xl font-extrabold mt-1">{language === 'my' ? currentWeather.cityBurmese : currentWeather.city}</h3>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -183,7 +183,7 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
             </div>
             <div>
               <p className="text-4xl font-extrabold tracking-tight">{currentWeather.tempCelsius}°C</p>
-              <p className="text-xs font-bold text-[#9becf7] mt-1 leading-snug">{currentWeather.conditionBurmese}</p>
+              <p className="text-xs font-bold text-[#9becf7] mt-1 leading-snug">{language === 'my' ? currentWeather.conditionBurmese : currentWeather.conditionEnglish}</p>
             </div>
           </div>
 
@@ -281,7 +281,7 @@ export const PredictionScreen: React.FC<PredictionScreenProps> = ({
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-gray-500 font-semibold">{t('လူစည်ကားမှု:', 'Foot Traffic:')}</span>
-                  <span className="font-extrabold text-[#825b00] px-2 py-0.5 bg-[#ffba27]/20 rounded-md">🔥 {market.footTrafficLevel}</span>
+                  <span className="font-extrabold text-[#825b00] px-2 py-0.5 bg-[#ffba27]/20 rounded-md">🔥 {language === 'my' ? ({ High: 'များ', Medium: 'အလယ်အလတ်', 'Very High': 'အလွန်များ' }[market.footTrafficLevel]) : market.footTrafficLevel}</span>
                 </div>
               </div>
             </div>

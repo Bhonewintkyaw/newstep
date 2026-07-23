@@ -11,9 +11,9 @@ interface MetricPeriodSelectorProps {
 const periods: Period[] = ['daily', 'monthly', 'yearly'];
 
 const labels: Record<Period, { my: string; en: string }> = {
-  daily: { my: 'နေ့စဉ် (Daily)', en: 'Daily' },
-  monthly: { my: 'လစဉ် (Monthly)', en: 'Monthly' },
-  yearly: { my: 'နှစ်စဉ် (Yearly)', en: 'Yearly' },
+  daily: { my: 'နေ့စဉ်', en: 'Daily' },
+  monthly: { my: 'လစဉ်', en: 'Monthly' },
+  yearly: { my: 'နှစ်စဉ်', en: 'Yearly' },
 };
 
 export const MetricPeriodSelector: React.FC<MetricPeriodSelectorProps> = ({ active, onChange, language }) => {
